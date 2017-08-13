@@ -5,4 +5,8 @@ package com.assistant.connection;
  */
 
 public class ClientConnection extends Connection {
+
+    ClientConnection() {
+        super(null);
+    }
 }

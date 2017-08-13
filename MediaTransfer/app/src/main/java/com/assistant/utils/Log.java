@@ -9,11 +9,11 @@ public class Log {
         android.util.Log.d(tag, msg);
     }
 
-    public static void logd(String tag, String msg) {
+    public static void d(String tag, String msg) {
         android.util.Log.d(tag, msg);
     }
 
-    public static void logd(Object object, String msg) {
+    public static void d(Object object, String msg) {
         android.util.Log.d(object.getClass().getName(), msg);
     }
 }
