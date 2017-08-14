@@ -13,9 +13,14 @@ import com.assistant.utils.ThreadPool;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -169,6 +174,9 @@ public class Connection {
 
         return 0;
     }
+
+
+
 
     private void sendDataInternal(final byte[] data, final int count) {
         try {
