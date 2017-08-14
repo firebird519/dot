@@ -8,25 +8,35 @@ public class ByteString {
     // use socket default buf size as string default size.
     private static final int DEFAULT_STRING_SIZE = 64*1024;
 
-    public byte[] data = new byte[DEFAULT_STRING_SIZE];
+    private int mSize;
 
-    private boolean mIsInUsing = false;
+    public byte[] data;
 
+    private int mRefCount = 0;
+
+    public ByteString() {
+        this(DEFAULT_STRING_SIZE);
+    }
+
+    public ByteString(int initialCapital) {
+        mSize = initialCapital;
+
+        data = new byte[mSize];
+    }
 
     public boolean isInUsing() {
-        return mIsInUsing;
+        return mRefCount > 0;
     }
 
     public int getBufByteSize() {
-        return DEFAULT_STRING_SIZE;
+        return mSize;
     }
 
-    // TODO: redesign this bytestring
     public void incRef() {
-        mIsInUsing = true;
+        mRefCount ++;
     }
 
     public void release() {
-        mIsInUsing = false;
+        mRefCount --;
     }
 }
