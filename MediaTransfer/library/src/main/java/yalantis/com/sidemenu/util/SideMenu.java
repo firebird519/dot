@@ -3,10 +3,12 @@ package yalantis.com.sidemenu.util;
 import android.os.Handler;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.Animation;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,12 +16,13 @@ import java.util.List;
 import yalantis.com.sidemenu.R;
 import yalantis.com.sidemenu.animation.FlipAnimation;
 import yalantis.com.sidemenu.interfaces.Resourceble;
-import yalantis.com.sidemenu.interfaces.ScreenShotable;
 
 /**
  * Created by Konstantin on 12.01.2015.
  */
-public class ViewAnimator<T extends Resourceble> {
+public class SideMenu<T extends Resourceble> {
+    private static final String TAG = "SideMenu";
+
     private final int ANIMATION_DURATION = 175;
     public static final int CIRCULAR_REVEAL_ANIMATION_DURATION = 500;
 
@@ -27,51 +30,72 @@ public class ViewAnimator<T extends Resourceble> {
   
     private List<T> list;
 
+    private static final int TAG_POSITION_INDEX = 0;
+
     private List<View> viewList = new ArrayList<>();
     //private ScreenShotable screenShotable;
     private DrawerLayout drawerLayout;
     private ViewAnimatorListener animatorListener;
 
+    private LinearLayout mContainer;
 
-    public ViewAnimator(AppCompatActivity activity,
-                        List<T> items,
-                        //ScreenShotable screenShotable,
-                        final DrawerLayout drawerLayout,
-                        ViewAnimatorListener animatorListener) {
-        this.appCompatActivity = activity;
+    public SideMenu(AppCompatActivity activity,
+                    List<T> items,
+                    //ScreenShotable screenShotable,
+                    final DrawerLayout drawerLayout,
+                    LinearLayout container,
+                    ViewAnimatorListener animatorListener) {
+        appCompatActivity = activity;
 
-        this.list = items;
-        //this.screenShotable = screenShotable;
+        list = items;
         this.drawerLayout = drawerLayout;
         this.animatorListener = animatorListener;
+        mContainer = container;
     }
 
+    /*
+     * To clear container when side menu hidden.
+     */
+    public void close() {
+        mContainer.removeAllViews();
+        mContainer.invalidate();
+    }
 
-    public void showMenuContent() {
+    public void show() {
+        if (mContainer.getChildCount() != 0) {
+            Log.d(TAG, "show, child of container view is not null." +
+                    " side menu should be displaying...");
+            return;
+        }
+
         setViewsClickable(false);
         viewList.clear();
-        double size = list.size();
+        int size = list.size();
+        Log.d(TAG, "show, size:" + size);
         for (int i = 0; i < size; i++) {
+            // TODO: there is no need to inflater when show every time.
             View viewMenu = appCompatActivity.getLayoutInflater().inflate(R.layout.menu_list_item, null);
+            viewMenu.setTag(Integer.valueOf(i));
 
-            final int finalI = i;
             viewMenu.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    int[] location = {0, 0};
-                    v.getLocationOnScreen(location);
-                    switchItem(list.get(finalI), location[1] + v.getHeight() / 2);
+                    int position = (Integer)v.getTag();
+                    onMenuSelected(list.get(position), position);
                 }
             });
+
             ((ImageView) viewMenu.findViewById(R.id.menu_item_image)).setImageResource(list.get(i).getImageRes());
             viewMenu.setVisibility(View.GONE);
             viewMenu.setEnabled(false);
             viewList.add(viewMenu);
-            animatorListener.addViewToContainer(viewMenu);
-            final double position = i;
-            final double delay = 3 * ANIMATION_DURATION * (position / size);
+            //animatorListener.addViewToContainer(viewMenu);
+            mContainer.addView(viewMenu);
+            final int position = i;
+            final long delay = 3 * ANIMATION_DURATION * (position / size);
             new Handler().postDelayed(new Runnable() {
                 public void run() {
+                    Log.d(TAG, "show, position:" + position + ", viewList size:" + viewList.size());
                     if (position < viewList.size()) {
                         animateView((int) position);
                     }
@@ -80,9 +104,8 @@ public class ViewAnimator<T extends Resourceble> {
                         setViewsClickable(true);
                     }
                 }
-            }, (long) delay);
+            }, delay);
         }
-
     }
 
     private void hideMenuContent() {
@@ -109,7 +132,8 @@ public class ViewAnimator<T extends Resourceble> {
         }
     }
 
-    private void animateView(int position) {
+    private void animateView(final int position) {
+        Log.d(TAG, "animateView:" + position);
         final View view = viewList.get(position);
         view.setVisibility(View.VISIBLE);
         FlipAnimation rotation =
@@ -120,17 +144,18 @@ public class ViewAnimator<T extends Resourceble> {
         rotation.setAnimationListener(new Animation.AnimationListener() {
             @Override
             public void onAnimationStart(Animation animation) {
-
+                Log.d(TAG, "onAnimationStart:" + position);
             }
 
             @Override
             public void onAnimationEnd(Animation animation) {
                 view.clearAnimation();
+                Log.d(TAG, "onAnimationEnd:" + position);
             }
 
             @Override
             public void onAnimationRepeat(Animation animation) {
-
+                Log.d(TAG, "onAnimationRepeat:" + position);
             }
         });
 
@@ -169,20 +194,16 @@ public class ViewAnimator<T extends Resourceble> {
         view.startAnimation(rotation);
     }
 
-    private void switchItem(Resourceble slideMenuItem, int topPosition) {
-        //this.screenShotable = animatorListener.onSwitch(slideMenuItem, screenShotable, topPosition);
+    private void onMenuSelected(Resourceble slideMenuItem, int topPosition) {
+        animatorListener.onItemSelected(slideMenuItem, topPosition);
         hideMenuContent();
     }
 
     public interface ViewAnimatorListener {
-
-        public void onSwitch(Resourceble slideMenuItem, int position);
+        public void onItemSelected(Resourceble slideMenuItem, int position);
 
         public void disableHomeButton();
 
         public void enableHomeButton();
-
-        public void addViewToContainer(View view);
-
     }
 }
