@@ -1,8 +1,8 @@
 package yalantis.com.sidemenu.util;
 
+import android.app.Activity;
 import android.os.Handler;
 import android.support.v4.widget.DrawerLayout;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.view.animation.AccelerateInterpolator;
@@ -26,7 +26,7 @@ public class SideMenu<T extends Resourceble> {
     private final int ANIMATION_DURATION = 175;
     public static final int CIRCULAR_REVEAL_ANIMATION_DURATION = 500;
 
-    private AppCompatActivity appCompatActivity;
+    private Activity mOwnActivity;
   
     private List<T> list;
 
@@ -39,13 +39,13 @@ public class SideMenu<T extends Resourceble> {
 
     private LinearLayout mContainer;
 
-    public SideMenu(AppCompatActivity activity,
+    public SideMenu(Activity activity,
                     List<T> items,
                     //ScreenShotable screenShotable,
                     final DrawerLayout drawerLayout,
                     LinearLayout container,
                     ViewAnimatorListener animatorListener) {
-        appCompatActivity = activity;
+        mOwnActivity = activity;
 
         list = items;
         this.drawerLayout = drawerLayout;
@@ -74,7 +74,7 @@ public class SideMenu<T extends Resourceble> {
         Log.d(TAG, "show, size:" + size);
         for (int i = 0; i < size; i++) {
             // TODO: there is no need to inflater when show every time.
-            View viewMenu = appCompatActivity.getLayoutInflater().inflate(R.layout.menu_list_item, null);
+            View viewMenu = mOwnActivity.getLayoutInflater().inflate(R.layout.menu_list_item, null);
             viewMenu.setTag(Integer.valueOf(i));
 
             viewMenu.setOnClickListener(new View.OnClickListener() {

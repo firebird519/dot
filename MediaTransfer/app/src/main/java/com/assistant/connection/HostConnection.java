@@ -18,9 +18,11 @@ public class HostConnection {
     public static final int HOST_CONNECTION_ERROR_CODE_CLOSED_IOERROR = 1;
 
     public interface HostConnectionListener {
-        void onSocketConnected(Socket socket);
-        void onHostClosed(int errorCode);
+        void onConnectionConnected(HostConnection host, Connection socket);
+        void onHostClosed(HostConnection host, int errorCode);
     }
+
+    private int mPort;
 
     private Set<HostConnectionListener> mListeners =
             new CopyOnWriteArraySet<HostConnectionListener>();
@@ -35,7 +37,7 @@ public class HostConnection {
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case EVENT_SOCKET_CONNECTED:
-                    notifySocketConnected((Socket) msg.obj);
+                    notifySocketConnected((Connection) msg.obj);
                     break;
                 case EVENT_HOSTSOCKET_CLOSED:
                     closeInternal(msg.arg1);
@@ -48,6 +50,11 @@ public class HostConnection {
     };
 
     public HostConnection() {
+        mPort = 0;
+    }
+
+    public int getPort() {
+        return mPort;
     }
 
     public int listen(int port, HostConnectionListener listener) {
@@ -59,13 +66,16 @@ public class HostConnection {
             return -1;
         }
 
-        mListeners.add(listener);
+        mPort = port;
+
         try {
             mServerSocket = new ServerSocket(port);
         } catch (IOException ioe) {
             ioe.printStackTrace();
             return -1;
         }
+
+        mListeners.add(listener);
 
         new Thread(new Runnable() {
             @Override
@@ -92,7 +102,7 @@ public class HostConnection {
                     }
 
                     if (socket != null) {
-                        mHandler.obtainMessage(EVENT_SOCKET_CONNECTED, socket).sendToTarget();
+                        mHandler.obtainMessage(EVENT_SOCKET_CONNECTED, new Connection(socket)).sendToTarget();
                     }
                 }
             }
@@ -121,15 +131,15 @@ public class HostConnection {
         }
     }
 
-    private void notifySocketConnected(Socket socket) {
+    private void notifySocketConnected(Connection connection) {
         for(HostConnectionListener listener : mListeners) {
-            listener.onSocketConnected(socket);
+            listener.onConnectionConnected(this, connection);
         }
     }
 
     private void notifySocketClosed(int errorCode) {
         for(HostConnectionListener listener : mListeners) {
-            listener.onHostClosed(errorCode);
+            listener.onHostClosed(this, errorCode);
         }
     }
 }

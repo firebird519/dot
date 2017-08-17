@@ -138,6 +138,13 @@ public class Connection {
         return mState;
     }
 
+    public String getIp() {
+        if (mSocket != null) {
+            return mSocket.getInetAddress().getHostAddress();
+        }
+        return "";
+    }
+
     public void connect(final String ip, final int port) {
         mThreadPool.addTask(new Runnable() {
             @Override
@@ -147,10 +154,9 @@ public class Connection {
         });
     }
 
-    public int listen(int port) {
-        return 0;
-    }
-
+    /*
+     * This function will be send data to the other side of this socket in thread pool.
+     */
     public int send(final byte[] data, final int count, final long timeout) {
         if (mState != CONNECTION_STATE_CONNECTED) {
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
@@ -174,9 +180,6 @@ public class Connection {
 
         return 0;
     }
-
-
-
 
     private void sendDataInternal(final byte[] data, final int count) {
         try {
@@ -259,9 +262,9 @@ public class Connection {
     }
 
     /*
-     * Note: Please don't call this interface in main thread otherwise
-     * NetworkOnMainThreadException will be thrown.
+     * Block and receive bytes which can be hold by cache or specify count.
      *
+     * throw: NetworkOnMainThreadException if this function is called in main thread.
      */
     public int receive(ByteString byteString, int count) {
         if (mState != CONNECTION_STATE_CONNECTED) {
@@ -327,7 +330,6 @@ public class Connection {
 
         return receivedCount;
     }
-
 
     private synchronized void createSocketAndNotify(String ip, int port) {
         try {
