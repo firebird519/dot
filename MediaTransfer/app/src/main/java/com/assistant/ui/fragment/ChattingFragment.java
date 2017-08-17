@@ -1,4 +1,4 @@
-package com.assistant.mediatransfer.ui.fragment;
+package com.assistant.ui.fragment;
 
 import android.app.Fragment;
 import android.content.Context;

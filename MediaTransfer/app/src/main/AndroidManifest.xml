@@ -17,7 +17,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         >
-        <activity android:name="com.assistant.mediatransfer.ui.MainActivity"
+        <activity android:name="com.assistant.ui.MainActivity"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -26,7 +26,7 @@
             </intent-filter>
         </activity>
 
-        <activity android:name="com.assistant.mediatransfer.ui.ChattingActivity">
+        <activity android:name="com.assistant.ui.ChattingActivity">
 
         </activity>
     </application>

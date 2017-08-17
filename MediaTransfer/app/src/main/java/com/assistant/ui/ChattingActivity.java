@@ -1,4 +1,4 @@
-package com.assistant.mediatransfer.ui;
+package com.assistant.ui;
 
 import android.app.Activity;
 

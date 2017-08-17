@@ -1,4 +1,4 @@
-package com.assistant.mediatransfer.ui;
+package com.assistant.ui;
 
 import android.app.FragmentManager;
 import android.content.res.Configuration;
@@ -10,7 +10,7 @@ import android.support.v7.widget.Toolbar;
 import android.view.View;
 import android.widget.LinearLayout;
 
-import com.assistant.mediatransfer.ui.fragment.ClientListFragment;
+import com.assistant.ui.fragment.ClientListFragment;
 import com.assistant.utils.Log;
 
 import java.util.ArrayList;

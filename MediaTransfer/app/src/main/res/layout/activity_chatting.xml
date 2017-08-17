@@ -4,7 +4,7 @@
     android:layout_height="match_parent">
 
     <fragment
-        android:name="com.assistant.mediatransfer.ui.ChattingActivity"
+        android:name="com.assistant.ui.ChattingActivity"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
