@@ -1,17 +1,19 @@
 package com.assistant.mediatransfer;
 
+import android.app.FragmentManager;
 import android.content.res.Configuration;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
+import com.assistant.mediatransfer.fragment.ClientListFragment;
 import com.assistant.utils.Log;
+import com.assistant.utils.ThreadPool;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,11 +33,30 @@ public class MainActivity extends AppCompatActivity {
     private ActionBarDrawerToggle mDrawerToggle;
     private LinearLayout mLinearLayout;
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        initSideMenu();
 
+        setActionBar();
+
+        showClientListFragment();
+    }
+
+    private void showClientListFragment() {
+        ClientListFragment fragment = new ClientListFragment();
+        FragmentManager fragmentManager = getFragmentManager();
+        fragmentManager.beginTransaction().replace(R.id.content_frame, fragment).commit();
+        // update selected item and title, then close the drawer
+
+        if (mSideMenu != null) {
+            mSideMenu.close();
+        }
+    }
+
+    private void initSideMenu() {
         mDrawerLayout = (DrawerLayout)findViewById(R.id.drawer_layout);
         mLinearLayout = (LinearLayout) findViewById(R.id.left_drawer);
         mLinearLayout.setOnClickListener(new View.OnClickListener() {
@@ -46,29 +67,28 @@ public class MainActivity extends AppCompatActivity {
         });
 
         createMenuList();
-        setActionBar();
 
         mSideMenu = new SideMenu<>(this,
                 mMenuItemList,
                 mDrawerLayout,
                 mLinearLayout,
                 new SideMenu.ViewAnimatorListener() {
-            @Override
-            public void onItemSelected(Resourceble slideMenuItem, int position) {
-                Log.d(this, "item:" + position + ":" + slideMenuItem.getName() + ", selected!");
-            }
+                    @Override
+                    public void onItemSelected(Resourceble slideMenuItem, int position) {
+                        Log.d(this, "item:" + position + ":" + slideMenuItem.getName() + ", selected!");
+                    }
 
-            @Override
-            public void disableHomeButton() {
-                getSupportActionBar().setHomeButtonEnabled(false);
-            }
+                    @Override
+                    public void disableHomeButton() {
+                        getSupportActionBar().setHomeButtonEnabled(false);
+                    }
 
-            @Override
-            public void enableHomeButton() {
-                getSupportActionBar().setHomeButtonEnabled(true);
-                mDrawerLayout.closeDrawers();
-            }
-        });
+                    @Override
+                    public void enableHomeButton() {
+                        getSupportActionBar().setHomeButtonEnabled(true);
+                        mDrawerLayout.closeDrawers();
+                    }
+                });
     }
 
     private void createMenuList() {
