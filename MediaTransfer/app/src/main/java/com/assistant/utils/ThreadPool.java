@@ -9,8 +9,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class ThreadPool {
     private static final String TAG = "ThreadPool";
-    private static final int MIN_POOL_SIZE = 1;
-    private static final int MAX_POOL_SIZE = 10;
+    private static final int DEFAULT_MIN_POOL_SIZE = 1;
+    private static final int DEFAULT_MAX_POOL_SIZE = 10;
 
     private int poolSize;
 
@@ -19,8 +19,8 @@ public class ThreadPool {
     private boolean mIsShutdown;
 
     public ThreadPool(int size) {
-        if (size < MIN_POOL_SIZE) size = MIN_POOL_SIZE;
-        if (size > MAX_POOL_SIZE) size = MAX_POOL_SIZE;
+        if (size < DEFAULT_MIN_POOL_SIZE) size = DEFAULT_MIN_POOL_SIZE;
+        if (size > DEFAULT_MAX_POOL_SIZE) size = DEFAULT_MAX_POOL_SIZE;
         poolSize = size;
 
         mExecutor = Executors.newFixedThreadPool(poolSize);

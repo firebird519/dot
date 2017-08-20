@@ -14,10 +14,8 @@ import com.assistant.utils.Utils;
  * Handler server search.
  */
 public class HostSearchHandler {
-    public static final int SERVER_SEARCH_SUCCESS = -1;
-    public static final int SERVER_SEARCH_FAILED = 0;
     public static final int SERVER_SEARCH_FAILED_WIFI_NOT_CONNECTED = 1;
-    public static final int SERVER_SEARCH_FAILED_CANCELED = 2;
+    public static final int SERVER_SEARCH_CANCELED = 2;
 
     public static final int IP_MARK_CONNECT_FAILED = -1;
     public static final int IP_MARK_IDLE = 0;
@@ -29,6 +27,7 @@ public class HostSearchHandler {
 
     int mPort;
 
+    // TODO: move this ip mask out and to support different network segment.
     int[] mSearchIpMask = new int[256];
     private Context mContext;
     private ThreadPool mThreadPool;
@@ -50,24 +49,24 @@ public class HostSearchHandler {
     }
 
     public void stopSearch(int reason) {
-        if (mThreadPool != null) {
-            mThreadPool.stop();
+        cleanSeachingHandler();
+
+        if (mListener != null && reason == SERVER_SEARCH_CANCELED) {
+            mListener.onSearchCanceled(SERVER_SEARCH_CANCELED);
         }
-
-        mIsSearching = false;
-
-        if (mListener != null && reason != SERVER_SEARCH_SUCCESS) {
-            mListener.serverSearchFailed(SERVER_SEARCH_FAILED_CANCELED);
-        }
-
-        cleanSeachingData();
     }
 
     boolean isSearching() {
         return mIsSearching;
     }
 
-    private void cleanSeachingData() {
+    private void cleanSeachingHandler() {
+        mIsSearching = false;
+
+        if (mThreadPool != null) {
+            mThreadPool.stop();
+        }
+
         mThreadPool = null;
         mListener = null;
 
@@ -110,7 +109,7 @@ public class HostSearchHandler {
     /*
      * search XXX.XXX.XXX.* ip addresses which idAddress in.
      */
-    public void searchServer(String ipAddress, int port, ServerSearchListener listener) {
+    public void searchServer(String ipSegment, int port, ServerSearchListener listener) {
         // no listener set, invalid server search action
         if (listener == null) {
             Log.d(TAG,
@@ -118,15 +117,13 @@ public class HostSearchHandler {
             return;
         }
 
-
-
         mPort = port;
         mListener = listener;
 
         // IPv4: 192.168.1.0
         NetworkInfoManager networkManager = NetworkInfoManager.getInstance(mContext);
         if (!networkManager.isWifiConnected()) {
-            mListener.serverSearchFailed(
+            mListener.onSearchCanceled(
                     SERVER_SEARCH_FAILED_WIFI_NOT_CONNECTED);
             return;
         }
@@ -142,12 +139,12 @@ public class HostSearchHandler {
             mThreadPool = new ThreadPool(poolSize);
         }
 
-        if (TextUtils.isEmpty(ipAddress)) {
-            ipAddress = networkManager.getWifiIpAddress().getHostAddress();
+        if (TextUtils.isEmpty(ipSegment)) {
+            ipSegment = networkManager.getWifiIpAddress().getHostAddress();
         }
 
         // Get wifi ip address, this ip should ignored when searching server.
-        byte[] ip = IPv4Utils.ipToBytesByInet(ipAddress);
+        byte[] ip = IPv4Utils.ipToBytesByInet(ipSegment);
         Log.d(TAG, "Wifi Address:" + IPv4Utils.bytesToIp(ip));
 
         byte selfIpByte = ip[3];
@@ -247,7 +244,7 @@ public class HostSearchHandler {
                             setIpMask(ip, IP_MARK_CONNECTED);
 
                             if (mListener != null) {
-                                mListener.serverConnected(connection);
+                                mListener.onConnectionConnected(connection);
                             }
                         }
                 } else {
@@ -257,17 +254,18 @@ public class HostSearchHandler {
                 // search end. notify failed and do necessary clean
                 if (!hasSearchingMask()) {
                     if (mListener != null) {
-                        mListener.serverSearchFailed(SERVER_SEARCH_FAILED);
+                        mListener.onSearchCompleted();
                     }
 
-                    stopSearch(SERVER_SEARCH_FAILED);
+                    cleanSeachingHandler();
                 }
             }
         });
     }
 
     public interface ServerSearchListener {
-        void serverSearchFailed(int reason);
-        void serverConnected(Connection connection);
+        void onConnectionConnected(Connection connection);
+        void onSearchCompleted();
+        void onSearchCanceled(int reason);
     }
 }

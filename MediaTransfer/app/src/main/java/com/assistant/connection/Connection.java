@@ -6,45 +6,46 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.NetworkOnMainThreadException;
 
-import com.assistant.bytestring.ByteString;
-import com.assistant.bytestring.ByteStringPool;
 import com.assistant.utils.Log;
 import com.assistant.utils.ThreadPool;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 import javax.net.SocketFactory;
 
 /**
- * Created by alex on 17-8-5.
+ * This connection will be send/receive data using below format:
+ * [Data header] + [json content] + [file content](if have)
+ *
+ * [Data header], custom length of data.
+ * version 1(22 bytes):"[v:(long);j:(long);f:(long)]"
+ *      v: version num. long type.
+ *      j: json length. long type.
+ *      f: file length. long type.
+ *
+ * [json content]: command or file header.
+ * [file content]: file content if have.
  */
 
 public class Connection {
-
     public interface ConnectionListener {
         void onConnected();
         void onConnectFailed(int reasonCode);
         void onClosed(int reasonCode);
 
+        // TODO: move it out as one separate data sending listener.
         /*
          * count - data bytes has been sent.
          * progress - percent data for data have been sent.
          */
         void onDataSendingProgress(int count, int progress);
         void onDataSendFailed(int reason);
-
-        void onDataReceived(ByteString string, int size);
     }
 
     private Set<ConnectionListener> mListeners =
@@ -59,13 +60,12 @@ public class Connection {
 
     public static final int SOCKET_DEFAULT_BUF_SIZE = 64*1024;
 
-    public static final int CONNECTION_REASON_CODE_BASE = 0;
-    public static final int CONNECTION_REASON_CODE_UNKNOWN_HOST = CONNECTION_REASON_CODE_BASE + 1;
-    public static final int CONNECTION_REASON_CODE_IO_EXCEPTION = CONNECTION_REASON_CODE_BASE + 2;
-    public static final int CONNECTION_REASON_CODE_SOCKET_SENDING = CONNECTION_REASON_CODE_BASE + 3;
-    public static final int CONNECTION_REASON_CODE_NOT_CONNECTED = CONNECTION_REASON_CODE_BASE + 4;
-    public static final int CONNECTION_REASON_CODE_SOCKET_RECEIVING= CONNECTION_REASON_CODE_BASE + 5;
-    public static final int CONNECTION_REASON_CODE_SEND_TIMEOUT = CONNECTION_REASON_CODE_BASE + 6;
+    public static final int CONNECTION_REASON_CODE_UNKNOWN_HOST = -1;
+    public static final int CONNECTION_REASON_CODE_IO_EXCEPTION = -2;
+    public static final int CONNECTION_REASON_CODE_SOCKET_SENDING = -3;
+    public static final int CONNECTION_REASON_CODE_NOT_CONNECTED = -4;
+    public static final int CONNECTION_REASON_CODE_SOCKET_RECEIVING= -5;
+    public static final int CONNECTION_REASON_CODE_SEND_TIMEOUT = -6;
 
     private int mLastReasonCode;
 
@@ -74,10 +74,13 @@ public class Connection {
     public static final int CONNECTION_STATE_CONNECTED = 2;
     public static final int CONNECTION_STATE_CLOSING = 3;
     public static final int CONNECTION_STATE_CLOSE_MANUAL = 4;
+
     /*
      * indicate current connection state
      */
     private int mState;
+
+    private int mId = -1;
 
     private boolean mIsDataSending;
     private boolean mIsDataReceiving;
@@ -86,8 +89,10 @@ public class Connection {
 
     private static final int EVENT_DATA_SENDING_PROGRESS = 0;
     private static final int EVENT_DATA_SEND_FAILED = 1;
-    private static final int EVENT_DATA_RECEIVED = 2;
-    private static final int EVENT_DATA_SEND_TIMEOUT = 3;
+    private static final int EVENT_DATA_SEND_TIMEOUT = 2;
+    private static final int EVENT_HEART_BEAT = 3;
+
+    private static final int HEART_BEAT_TIMESTAMP = 5*60*1000; //5 min
 
     Handler mThreadHandler;
 
@@ -118,14 +123,13 @@ public class Connection {
                     case EVENT_DATA_SEND_FAILED:
                         notifyDataSendFailed(msg.arg1);
                         break;
-                    case EVENT_DATA_RECEIVED:
-                        notifyDataReceived((ByteString) msg.obj, msg.arg1);
-                        break;
                     case EVENT_DATA_SEND_TIMEOUT:
                         notifyDataSendFailed(CONNECTION_REASON_CODE_SEND_TIMEOUT);
 
                         closeInteranl(CONNECTION_REASON_CODE_SEND_TIMEOUT);
                         break;
+                    case EVENT_HEART_BEAT:
+                        heartBeat();
                     default:
                         break;
                 }
@@ -143,6 +147,14 @@ public class Connection {
             return mSocket.getInetAddress().getHostAddress();
         }
         return "";
+    }
+
+    public void setId(final int id) {
+        mId = id;
+    }
+
+    public int getId() {
+        return mId;
     }
 
     public void connect(final String ip, final int port) {
@@ -266,7 +278,7 @@ public class Connection {
      *
      * throw: NetworkOnMainThreadException if this function is called in main thread.
      */
-    public int receive(ByteString byteString, int count) {
+    public int receive(byte[] buf, long size) {
         if (mState != CONNECTION_STATE_CONNECTED) {
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
@@ -275,7 +287,7 @@ public class Connection {
             throw new NetworkOnMainThreadException();
         }
 
-        if (byteString == null || count <= 0) {
+        if (buf == null || size <= 0) {
             Log.d(this, "receive parameter is not right!");
             return 0;
         }
@@ -291,19 +303,18 @@ public class Connection {
 
         //ByteString byteString = ByteStringPool.getInstance().getByteString();
 
-        int bufSize = byteString.getBufByteSize();
+        long bufSize = size; //byteString.getBufByteSize();
 
         while (true) {
             if (mSocketInputStream == null) {
                 break;
             }
             try {
-                receivedEverytime = mSocketInputStream.read(byteString.data, receivedCount, bufSize - receivedCount);
+                receivedEverytime = mSocketInputStream.read(buf, receivedCount, (int)bufSize - receivedCount);
             } catch (IOException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
 
-                byteString.release();
                 closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
 
                 // end current thread if some exception happened!
@@ -314,14 +325,7 @@ public class Connection {
 
             // TODO: log received data details for debug
 
-            if (count == receivedCount || (receivedCount == bufSize)) {
-                Message msg = mThreadHandler.
-                        obtainMessage(EVENT_DATA_RECEIVED, byteString);
-
-                msg.arg1 = receivedCount;
-
-                msg.sendToTarget();
-
+            if (size == receivedCount || (receivedCount == bufSize)) {
                 mIsDataReceiving = false;
 
                 break;
@@ -359,16 +363,25 @@ public class Connection {
         }
     }
 
+    public void startHeartBeat() {
+        mThreadHandler.sendEmptyMessageDelayed(EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
+    }
+
+    private void heartBeat() {
+        sendUrgentData();
+
+        if (mState == CONNECTION_STATE_CONNECTED) {
+            mThreadHandler.sendEmptyMessageDelayed(EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
+        }
+    }
     /*
      * used for socket heart-beat checking.
      */
-    public void sendUrgentData() {
+    private void sendUrgentData() {
         mThreadPool.addTask(new Runnable() {
 
             @Override
             public void run() {
-                // TODO: add synchronized for socket operation.
-                // connection already closed. no need to check!
                 synchronized (mSocketLock) {
                     if ((mSocket == null) || (mSocket.isClosed())) {
                         return;
@@ -474,12 +487,6 @@ public class Connection {
     private void notifyDataSendFailed(int reason) {
         for(ConnectionListener listener : mListeners) {
             listener.onDataSendFailed(reason);
-        }
-    }
-
-    private void notifyDataReceived(ByteString string, int size) {
-        for(ConnectionListener listener : mListeners) {
-            listener.onDataReceived(string, size);
         }
     }
 

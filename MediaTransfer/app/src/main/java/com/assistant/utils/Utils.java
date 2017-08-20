@@ -7,6 +7,8 @@ import android.os.BatteryManager;
 import android.os.storage.StorageManager;
 import android.util.Log;
 
+import java.io.File;
+
 public class Utils {
     public static final String DCIM = "DCIM";
     private static final boolean DEBUG = true;
@@ -57,5 +59,15 @@ public class Utils {
         return null;
     }
 
+    public static String getAppStoragePath(Context context) {
+        String path = "";
+        File file = context.getFilesDir();
+
+        if (file != null) {
+            path = file.getAbsolutePath();
+        }
+
+        return path;
+    }
 
 }
