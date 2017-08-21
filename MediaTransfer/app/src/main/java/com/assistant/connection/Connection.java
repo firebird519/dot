@@ -6,6 +6,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.NetworkOnMainThreadException;
 
+import com.assistant.mediatransfer.ClientInfo;
 import com.assistant.utils.Log;
 import com.assistant.utils.ThreadPool;
 
@@ -38,14 +39,6 @@ public class Connection {
         void onConnected();
         void onConnectFailed(int reasonCode);
         void onClosed(int reasonCode);
-
-        // TODO: move it out as one separate data sending listener.
-        /*
-         * count - data bytes has been sent.
-         * progress - percent data for data have been sent.
-         */
-        void onDataSendingProgress(int count, int progress);
-        void onDataSendFailed(int reason);
     }
 
     private Set<ConnectionListener> mListeners =
@@ -65,32 +58,28 @@ public class Connection {
     public static final int CONNECTION_REASON_CODE_SOCKET_SENDING = -3;
     public static final int CONNECTION_REASON_CODE_NOT_CONNECTED = -4;
     public static final int CONNECTION_REASON_CODE_SOCKET_RECEIVING= -5;
-    public static final int CONNECTION_REASON_CODE_SEND_TIMEOUT = -6;
 
     private int mLastReasonCode;
 
     public static final int CONNECTION_STATE_NOT_CONNECTED = 0;
     public static final int CONNECTION_STATE_CONNECTING = 1;
     public static final int CONNECTION_STATE_CONNECTED = 2;
-    public static final int CONNECTION_STATE_CLOSING = 3;
-    public static final int CONNECTION_STATE_CLOSE_MANUAL = 4;
+    public static final int CONNECTION_STATE_CLOSE_MANUAL = 3;
 
     /*
      * indicate current connection state
      */
     private int mState;
+    private ClientInfo mClientInfo = null;
 
     private int mId = -1;
 
     private boolean mIsDataSending;
     private boolean mIsDataReceiving;
 
-    ThreadPool mThreadPool;
+    private ThreadPool mThreadPool;
 
-    private static final int EVENT_DATA_SENDING_PROGRESS = 0;
-    private static final int EVENT_DATA_SEND_FAILED = 1;
-    private static final int EVENT_DATA_SEND_TIMEOUT = 2;
-    private static final int EVENT_HEART_BEAT = 3;
+    private static final int EVENT_HEART_BEAT = 0;
 
     private static final int HEART_BEAT_TIMESTAMP = 5*60*1000; //5 min
 
@@ -110,24 +99,13 @@ public class Connection {
             mState = CONNECTION_STATE_NOT_CONNECTED;
         }
 
-        mThreadPool = new ThreadPool(5);
+        mThreadPool = new ThreadPool(2);
 
         HandlerThread thread = new HandlerThread("connectionHandlerThread");
         mThreadHandler = new Handler(thread.getLooper()) {
             @Override
             public void handleMessage(Message msg) {
                 switch (msg.what) {
-                    case EVENT_DATA_SENDING_PROGRESS:
-                        notifyDataSendingProgress(msg.arg1, msg.arg2);
-                        break;
-                    case EVENT_DATA_SEND_FAILED:
-                        notifyDataSendFailed(msg.arg1);
-                        break;
-                    case EVENT_DATA_SEND_TIMEOUT:
-                        notifyDataSendFailed(CONNECTION_REASON_CODE_SEND_TIMEOUT);
-
-                        closeInteranl(CONNECTION_REASON_CODE_SEND_TIMEOUT);
-                        break;
                     case EVENT_HEART_BEAT:
                         heartBeat();
                     default:
@@ -157,6 +135,14 @@ public class Connection {
         return mId;
     }
 
+    public void setClientInfo(ClientInfo info) {
+        mClientInfo = info;
+    }
+
+    public ClientInfo getClientInfo() {
+        return mClientInfo;
+    }
+
     public void connect(final String ip, final int port) {
         mThreadPool.addTask(new Runnable() {
             @Override
@@ -167,9 +153,15 @@ public class Connection {
     }
 
     /*
-     * This function will be send data to the other side of this socket in thread pool.
+     * This function will send data synchronized. don't block main thread.
+     *
+     * return: data size sent or failed code for sending.
      */
-    public int send(final byte[] data, final int count, final long timeout) {
+    public int send(final byte[] data, final long size) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            throw new NetworkOnMainThreadException();
+        }
+
         if (mState != CONNECTION_STATE_CONNECTED) {
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
@@ -177,48 +169,17 @@ public class Connection {
             return CONNECTION_REASON_CODE_SOCKET_SENDING;
         }
 
-        mIsDataSending = true;
-
-        if (timeout > 0) {
-            mThreadHandler.sendEmptyMessageDelayed(EVENT_DATA_SEND_TIMEOUT, timeout);
-        }
-
-        mThreadPool.addTask(new Runnable() {
-            @Override
-            public void run() {
-                sendDataInternal(data, count);
-            }
-        });
-
-        return 0;
-    }
-
-    private void sendDataInternal(final byte[] data, final int count) {
-        try {
-            mSocketOutputStream = new DataOutputStream(mSocket.getOutputStream());
-        } catch (IOException ioe) {
-            mThreadHandler.
-                    obtainMessage(EVENT_DATA_SEND_FAILED,
-                            CONNECTION_REASON_CODE_IO_EXCEPTION, 0).
-                    sendToTarget();
-            Log.d(this, "sendDataInternal, SocketOutputStream is not init.");
-
-            return;
-        }
-
         if (mSocketOutputStream == null) {
-            mThreadHandler.
-                    obtainMessage(EVENT_DATA_SEND_FAILED,
-                            CONNECTION_REASON_CODE_NOT_CONNECTED, 0).
-                    sendToTarget();
-            Log.d(this, "sendDataInternal, SocketOutputStream is not init.");
+            Log.d(this, "send, SocketOutputStream is not init.");
 
-            return;
+            return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
+
+        mIsDataSending = true;
 
         int sentCount = 0;
         int sendCountEveryTime;
-        int countNotSend = count;
+        int countNotSend = (int)size;
 
         try {
             do {
@@ -227,11 +188,7 @@ public class Connection {
                     if (mSocketOutputStream != null) {
                         mSocketOutputStream.write(data, sentCount, sendCountEveryTime);
                     } else {
-                        mThreadHandler.
-                                obtainMessage(EVENT_DATA_SEND_FAILED,
-                                        CONNECTION_REASON_CODE_NOT_CONNECTED, 0).
-                                sendToTarget();
-                        Log.d(this, "sendDataInternal, SocketOutputStream is not init.");
+                        Log.d(this, "send, SocketOutputStream is not init.");
                         break;
                     }
                 }
@@ -239,38 +196,27 @@ public class Connection {
                 sentCount += sendCountEveryTime;
                 countNotSend -= sendCountEveryTime;
 
-                Log.d(this, "sendDataInternal, sentCount:" + sentCount +
+                Log.d(this, "send, sentCount:" + sentCount +
                         ", countNotSend:" + countNotSend);
-
-                mThreadHandler.
-                        obtainMessage(EVENT_DATA_SENDING_PROGRESS, sentCount,
-                                (sentCount * 100) / count).
-                        sendToTarget();
             } while (countNotSend > 0);
-
-            mThreadHandler.removeMessages(EVENT_DATA_SEND_TIMEOUT);
 
             mIsDataSending = false;
 
             synchronized (mSocketOutputStreamLock) {
                 if (mSocketOutputStream != null) {
                     mSocketOutputStream.flush();
-                } else {
-                    mThreadHandler.
-                            obtainMessage(EVENT_DATA_SEND_FAILED,
-                                    CONNECTION_REASON_CODE_NOT_CONNECTED, 0).
-                            sendToTarget();
-                    Log.d(this, "sendDataInternal, SocketOutputStream is not init.");
-                }
 
-                mSocketOutputStream.close();
-                mSocketOutputStream = null;
+                    // ignore previous heart beat event which only needed if there is no data traffic.
+                    startHeartBeat();
+                }
             }
         } catch (Exception ioe) {
             ioe.printStackTrace();
 
             closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
         }
+
+        return sentCount;
     }
 
     /*
@@ -332,6 +278,9 @@ public class Connection {
             }
         }
 
+        // ignore previous heart beat event which only needed if there is no data traffic.
+        startHeartBeat();
+
         return receivedCount;
     }
 
@@ -356,6 +305,7 @@ public class Connection {
     private void initSocketSteam() {
         try {
             mSocketInputStream = new DataInputStream(mSocket.getInputStream());
+            mSocketOutputStream = new DataOutputStream(mSocket.getOutputStream());
         } catch (IOException ex) {
             ex.printStackTrace();
 
@@ -364,6 +314,7 @@ public class Connection {
     }
 
     public void startHeartBeat() {
+        mThreadHandler.removeMessages(EVENT_HEART_BEAT);
         mThreadHandler.sendEmptyMessageDelayed(EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
     }
 
@@ -484,21 +435,9 @@ public class Connection {
         }
     }
 
-    private void notifyDataSendFailed(int reason) {
-        for(ConnectionListener listener : mListeners) {
-            listener.onDataSendFailed(reason);
-        }
-    }
-
     private void notifyClosed(int reason) {
         for(ConnectionListener listener : mListeners) {
             listener.onClosed(reason);
-        }
-    }
-
-    private void notifyDataSendingProgress(int count, int progress) {
-        for(ConnectionListener listener : mListeners) {
-            listener.onDataSendingProgress(count, progress);
         }
     }
 }

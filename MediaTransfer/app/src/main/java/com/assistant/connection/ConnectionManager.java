@@ -9,6 +9,7 @@ import android.text.TextUtils;
 
 import com.assistant.bytestring.ByteString;
 import com.assistant.bytestring.ByteStringPool;
+import com.assistant.mediatransfer.ClientInfo;
 import com.assistant.utils.Log;
 import com.assistant.utils.ThreadPool;
 import com.assistant.utils.Utils;
@@ -17,6 +18,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -121,6 +123,12 @@ public class ConnectionManager {
         }
     }
 
+    public Connection getConnection(int id) {
+        Connection conn = mConnections.get(id);
+
+        return conn;
+    }
+
     private Integer generateConnectionId() {
         Integer[] keys = (Integer[])mConnections.keySet().toArray();
 
@@ -173,19 +181,91 @@ public class ConnectionManager {
         }
     }
 
+    public static final int DATA_SEND_SUCESS = 0;
+    public static final int DATA_SEND_FAILED = -1;
     public interface DataSendListener {
         void onSendProgress(int percent);
         void onResult(int ret, int failedReason);
     }
 
-    public void sendData(int connId, byte[] data, int len, long timeout,
+    /**
+     * Send one jsonBytes packet for connection with connId.
+     *
+     * @param connId
+     * @param jsonBytes : bytes of one json structure.
+     * @param jsonLen
+     * @param fileBytes:
+     * @param fileLen
+     * @param listener
+     */
+    public void sendData(final int connId,
+                         final byte[] jsonBytes,
+                         final long jsonLen,
+                         final byte[] fileBytes,
+                         final long fileLen,
+                         final DataSendListener listener) {
+        mThreadPool.addTask(new Runnable() {
+            @Override
+            public void run() {
+                Connection conn = getConnection(connId);
+                int ret = 0;
+                boolean success = false;
+
+                if (conn != null) {
+                    // TODO: separate to small jsonBytes block for progress if needed?
+                    byte[] header = generateDataHeader(jsonLen, fileLen);
+
+                    ret = conn.send(header, DATA_HEADER_LEN_v1);
+                    if (ret == DATA_HEADER_LEN_v1) {
+                        ret = conn.send(jsonBytes, jsonLen);
+
+                        if (ret == jsonLen && fileLen > 0) {
+                            ret = conn.send(fileBytes, fileLen);
+                            if (ret == fileLen) {
+                                success = true;
+                            }
+                        } else if (ret == jsonLen) {
+                            success = true;
+                        }
+                    }
+                }
+
+                if (success) {
+                    listener.onSendProgress(100);
+                    listener.onResult(DATA_SEND_SUCESS, ret);
+                } else {
+                    listener.onResult(DATA_SEND_FAILED, ret);
+                }
+            }
+        });
+    }
+
+    public void sendFile(int connId, String strFilePathName,
                          final DataSendListener listener) {
 
     }
 
-    public void sendFile(int connId, String strFilePathName, long timeout,
-                         final DataSendListener listener) {
+    /**
+     * version 1(22 bytes):"[v:(long);j:(long);f:(long)]"
+     * v: version num. long type.
+     * j: json length. long type.
+     * f: file length. long type.
+     */
+    private byte[] generateDataHeader(long jsonLen, long fileLen) {
+        ByteBuffer buf = ByteBuffer.allocate(DATA_HEADER_LEN_v1);
 
+        try {
+            buf.put("[v:1;j:".getBytes("UTF-8"));
+            buf.putLong(jsonLen);
+            buf.put(";f:".getBytes("UTF-8"));
+            buf.putLong(fileLen);
+            buf.put("]".getBytes("UTF-8"));
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            return null;
+        }
+
+        return buf.array();
     }
 
     private class ConnectionReceiverThread extends Thread {
@@ -290,7 +370,6 @@ public class ConnectionManager {
          *
          */
         private void handleConnectionHeader() {
-            // TODO:....
             byte start = mHeaderBuf.get();
             byte v = mHeaderBuf.get();
             byte colon1 = mHeaderBuf.get();
@@ -464,12 +543,6 @@ public class ConnectionManager {
         public void onClosed(int reasonCode) {
             removeConnection(mConnection, reasonCode);
         }
-
-        @Override
-        public void onDataSendingProgress(int count, int progress) {}
-
-        @Override
-        public void onDataSendFailed(int reason) {}
     }
 
     private HostConnection.HostConnectionListener mHostListener =
