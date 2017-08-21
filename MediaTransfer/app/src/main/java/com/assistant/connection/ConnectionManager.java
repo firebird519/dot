@@ -18,6 +18,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,18 +36,16 @@ import java.util.concurrent.CopyOnWriteArraySet;
  */
 
 public class ConnectionManager {
-
     public static int DATA_HEADER_LEN_v1 = 22;
     public static int DATA_HEADER_V1 = 1;
-
 
     private Context mContext;
 
     public interface ConnectionManagerListener {
-        public void onConnectionAdded(int id);
-        public void onConnectionRemoved(int id, int reason);
+        void onConnectionAdded(int id);
+        void onConnectionRemoved(int id, int reason);
 
-        public void onDataReceived(int id, ByteString data, boolean isFile);
+        void onDataReceived(int id, ByteString data, boolean isFile);
     }
 
     private Set<ConnectionManagerListener> mListeners =
@@ -54,6 +53,8 @@ public class ConnectionManager {
 
     private Map<Integer, Connection> mConnections =
             Collections.synchronizedMap(new HashMap<Integer, Connection>());
+
+    ArrayList<HostConnection> mHostConnList = new ArrayList<>();
 
     private ThreadPool mThreadPool = new ThreadPool(5);
 
@@ -139,6 +140,36 @@ public class ConnectionManager {
             mConnections.remove(connection);
 
             mThreadHandler.obtainMessage(EVENT_CONNECTION_REMOVED, connection.getId(), reason);
+        }
+    }
+
+    public void addListener(ConnectionManagerListener listener) {
+        if (listener != null) {
+            mListeners.add(listener);
+        }
+    }
+
+    public void removeListener(ConnectionManagerListener listener) {
+        if (listener != null) {
+            mListeners.remove(listener);
+        }
+    }
+
+    private void notifyConnectionAdded(int connId) {
+        for(ConnectionManagerListener listener : mListeners) {
+            listener.onConnectionAdded(connId);
+        }
+    }
+
+    private void notifyConnectionRemoved(int connId, int reason) {
+        for(ConnectionManagerListener listener : mListeners) {
+            listener.onConnectionRemoved(connId, reason);
+        }
+    }
+
+    private void notifyDataReceived(int connId, ByteString data, boolean isFile) {
+        for(ConnectionManagerListener listener : mListeners) {
+            listener.onDataReceived(connId, data, isFile);
         }
     }
 
@@ -441,6 +472,34 @@ public class ConnectionManager {
         public void onDataSendFailed(int reason) {}
     }
 
+    private HostConnection.HostConnectionListener mHostListener =
+            new HostConnection.HostConnectionListener() {
+                @Override
+                public void onConnectionConnected(HostConnection host, Connection connection) {
+                    if (connection != null) {
+                        addConnection(connection);
+                    }
+                }
+
+                @Override
+                public void onHostClosed(HostConnection host, int errorCode) {
+                    if (host != null) {
+                        mHostConnList.remove(host);
+                    }
+
+                    // TODO: notify to UI
+                }
+            };
+
+    private void listen(int port) {
+        final HostConnection hostConnection =
+                ConnectionFactory.createHostConnection(port, mHostListener);
+
+        if (hostConnection != null) {
+            mHostConnList.add(hostConnection);
+        }
+    }
+
     public interface SearchListener{
         void onSearchCompleted();
         void onSearchCanceled(int reason);
@@ -464,35 +523,4 @@ public class ConnectionManager {
             }
         });
     }
-
-    public void addListener(ConnectionManagerListener listener) {
-        if (listener != null) {
-            mListeners.add(listener);
-        }
-    }
-
-    public void removeListener(ConnectionManagerListener listener) {
-        if (listener != null) {
-            mListeners.remove(listener);
-        }
-    }
-
-    private void notifyConnectionAdded(int connId) {
-        for(ConnectionManagerListener listener : mListeners) {
-            listener.onConnectionAdded(connId);
-        }
-    }
-
-    private void notifyConnectionRemoved(int connId, int reason) {
-        for(ConnectionManagerListener listener : mListeners) {
-            listener.onConnectionRemoved(connId, reason);
-        }
-    }
-
-    private void notifyDataReceived(int connId, ByteString data, boolean isFile) {
-        for(ConnectionManagerListener listener : mListeners) {
-            listener.onDataReceived(connId, data, isFile);
-        }
-    }
-
 }
