@@ -51,7 +51,7 @@ public class Utils {
                     .getSystemService(Context.STORAGE_SERVICE);
 
             return (String[]) sm.getClass()
-                    .getMethod("getVolumePaths", null).invoke(sm, null);
+                    .getMethod("getVolumePaths", (Class<?>)null).invoke(sm, null);
         } catch (Exception e) {
             e.printStackTrace();
         }

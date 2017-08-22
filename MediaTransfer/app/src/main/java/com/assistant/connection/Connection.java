@@ -6,7 +6,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.NetworkOnMainThreadException;
 
-import com.assistant.mediatransfer.ClientInfo;
 import com.assistant.utils.Log;
 import com.assistant.utils.ThreadPool;
 
@@ -70,7 +69,7 @@ public class Connection {
      * indicate current connection state
      */
     private int mState;
-    private ClientInfo mClientInfo = null;
+    private Object mConnData = null;
 
     private int mId = -1;
 
@@ -135,12 +134,12 @@ public class Connection {
         return mId;
     }
 
-    public void setClientInfo(ClientInfo info) {
-        mClientInfo = info;
+    public void setConnData(Object info) {
+        mConnData = info;
     }
 
-    public ClientInfo getClientInfo() {
-        return mClientInfo;
+    public Object getConnData() {
+        return mConnData;
     }
 
     public void connect(final String ip, final int port) {

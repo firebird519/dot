@@ -1,4 +1,4 @@
-package com.assistant.utils;
+package com.assistant.mediatransfer;
 
 public class NetInfo {
     private static NetInfo sMe;

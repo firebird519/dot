@@ -1,4 +1,4 @@
-package com.assistant.utils;
+package com.assistant.mediatransfer;
 
 import android.content.Context;
 import android.content.IntentFilter;
@@ -8,6 +8,8 @@ import android.net.NetworkInfo;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.text.format.Formatter;
+
+import com.assistant.utils.Log;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;

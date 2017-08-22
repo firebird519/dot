@@ -9,7 +9,6 @@ import android.text.TextUtils;
 
 import com.assistant.bytestring.ByteString;
 import com.assistant.bytestring.ByteStringPool;
-import com.assistant.mediatransfer.ClientInfo;
 import com.assistant.utils.Log;
 import com.assistant.utils.ThreadPool;
 import com.assistant.utils.Utils;
@@ -128,6 +127,14 @@ public class ConnectionManager {
         Connection conn = mConnections.get(id);
 
         return conn;
+    }
+
+    public int getConnectionsCount() {
+        return mConnections.size();
+    }
+
+    public Integer[] getConnectionIds() {
+        return (Integer[])mConnections.keySet().toArray();
     }
 
     private Integer generateConnectionId() {

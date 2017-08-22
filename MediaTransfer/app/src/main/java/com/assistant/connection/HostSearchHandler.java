@@ -4,7 +4,7 @@ import android.content.Context;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.assistant.utils.NetworkInfoManager;
+import com.assistant.mediatransfer.NetworkInfoManager;
 import com.assistant.utils.ThreadPool;
 import com.assistant.utils.IPv4Utils;
 import com.assistant.utils.Utils;

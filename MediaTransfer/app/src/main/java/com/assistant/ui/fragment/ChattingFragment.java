@@ -16,6 +16,8 @@ import mediatransfer.assistant.com.mediatransfer.R;
 public class ChattingFragment extends Fragment {
     private ListView mChattingListView;
 
+    private LayoutInflater mLayoutInflater = null;
+
     @Override
     public void onAttach(Context context) {
         super.onAttach(context);
@@ -51,7 +53,7 @@ public class ChattingFragment extends Fragment {
         @Override
         public View getView(int position, View convertView, ViewGroup container) {
             if (convertView == null) {
-                convertView = getLayoutInflater().inflate(R.layout.chatting_item, container, false);
+                convertView = mLayoutInflater.inflate(R.layout.chatting_item, container, false);
             }
 
             ((TextView) convertView.findViewById(R.id.owner))
@@ -70,6 +72,8 @@ public class ChattingFragment extends Fragment {
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+        mLayoutInflater = (LayoutInflater) getActivity()
+                .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
     }
 
     @Override

@@ -5,4 +5,5 @@ package com.assistant.mediatransfer;
  */
 
 public class ClientInfo extends Command {
+    public String name;
 }

@@ -2,16 +2,11 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-        <listView android:id="@+id/list_view"
+        <TextView android:id="@+id/indicator_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+        <listView android:id="@+id/client_list_view"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content">
-
-
         </listView>
-
-        <TextView
-            android:id="@+id/testing"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="testing...." />
 </LinearLayout>
