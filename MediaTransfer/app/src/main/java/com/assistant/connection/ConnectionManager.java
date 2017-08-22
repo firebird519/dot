@@ -15,6 +15,7 @@ import com.assistant.utils.ThreadPool;
 import com.assistant.utils.Utils;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -194,15 +195,11 @@ public class ConnectionManager {
      * @param connId
      * @param jsonBytes : bytes of one json structure.
      * @param jsonLen
-     * @param fileBytes:
-     * @param fileLen
      * @param listener
      */
     public void sendData(final int connId,
                          final byte[] jsonBytes,
                          final long jsonLen,
-                         final byte[] fileBytes,
-                         final long fileLen,
                          final DataSendListener listener) {
         mThreadPool.addTask(new Runnable() {
             @Override
@@ -213,18 +210,13 @@ public class ConnectionManager {
 
                 if (conn != null) {
                     // TODO: separate to small jsonBytes block for progress if needed?
-                    byte[] header = generateDataHeader(jsonLen, fileLen);
+                    byte[] header = generateDataHeader(jsonLen, 0);
 
                     ret = conn.send(header, DATA_HEADER_LEN_v1);
                     if (ret == DATA_HEADER_LEN_v1) {
                         ret = conn.send(jsonBytes, jsonLen);
 
-                        if (ret == jsonLen && fileLen > 0) {
-                            ret = conn.send(fileBytes, fileLen);
-                            if (ret == fileLen) {
-                                success = true;
-                            }
-                        } else if (ret == jsonLen) {
+                        if (ret == jsonLen) {
                             success = true;
                         }
                     }
@@ -240,9 +232,86 @@ public class ConnectionManager {
         });
     }
 
-    public void sendFile(int connId, String strFilePathName,
+    /**
+     * send file content. file info should be already added to json bytes.
+     *
+     * @param connId
+     * @param jsonBytes, this json data should be already contain file info of strFilePathName.
+     * @param jsonLen
+     * @param strFilePathName
+     * @param listener
+     */
+    public void sendFile(final int connId,
+                         final byte[] jsonBytes,
+                         final long jsonLen,
+                         final String strFilePathName,
                          final DataSendListener listener) {
+        mThreadPool.addTask(new Runnable() {
+            @Override
+            public void run() {
+                Connection conn = getConnection(connId);
+                int ret = 0;
+                boolean success = false;
 
+                if (conn != null) {
+                    FileInputStream fileInputStream;
+                    try {
+                        fileInputStream = new FileInputStream(strFilePathName);
+                        int fileLen = fileInputStream.available();
+
+                        byte[] header = generateDataHeader(jsonLen, fileLen);
+
+                        ret = conn.send(header, DATA_HEADER_LEN_v1);
+                        if (ret == DATA_HEADER_LEN_v1) {
+                            ret = conn.send(jsonBytes, jsonLen);
+
+                            if (ret == jsonLen && fileLen > 0) {
+                                int bufferSize =
+                                        fileLen > Connection.SOCKET_DEFAULT_BUF_SIZE ?
+                                                Connection.SOCKET_DEFAULT_BUF_SIZE : fileLen;
+
+                                byte [] buffer = new byte[bufferSize];
+
+                                int sentBytes = 0;
+                                int bytesFileRead;
+                                do {
+                                    bytesFileRead = fileInputStream.read(buffer);
+                                    ret = conn.send(buffer, bytesFileRead);
+
+                                    if (ret == bytesFileRead) {
+
+                                        sentBytes += ret;
+                                        listener.onSendProgress((sentBytes * 100)/fileLen);
+                                    } else {
+                                        success = false;
+                                        break;
+                                    }
+                                } while(sentBytes < fileLen);
+
+                                if (sentBytes == fileLen) {
+                                    success = true;
+                                }
+                            } else if (ret == jsonLen) {
+                                listener.onSendProgress(100);
+                                success = true;
+                            }
+                        }
+
+                        fileInputStream.close();
+                    } catch(Exception e){
+                        e.printStackTrace();
+                    }
+                } else {
+                    ret = Connection.CONNECTION_REASON_CODE_NOT_CONNECTED;
+                }
+
+                if (success) {
+                    listener.onResult(DATA_SEND_SUCESS, 0);
+                } else {
+                    listener.onResult(DATA_SEND_FAILED, ret);
+                }
+            }
+        });
     }
 
     /**
