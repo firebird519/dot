@@ -1,5 +1,7 @@
 package com.assistant.connection;
 
+import com.assistant.utils.Log;
+
 import java.io.IOException;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -11,7 +13,7 @@ import javax.net.SocketFactory;
  */
 
 public class ConnectionFactory {
-
+    private static final String TAG = "ConnectionFactory";
 
     public static HostConnection createHostConnection(int port, HostConnection.HostConnectionListener listener) {
         HostConnection host  = new HostConnection();
@@ -40,19 +42,24 @@ public class ConnectionFactory {
         Socket socket = null;
 
         try {
+            Log.d(TAG, "createSocket:" + ip + ", port:" + port);
             socket = SocketFactory.getDefault().createSocket(ip, port);
         } catch (UnknownHostException e) {
-            e.printStackTrace();
+            //e.printStackTrace();
+            Log.d(TAG, "UnknownHost for ip:" + ip);
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.d(TAG, "UnknownHost, io exception for ip:" + ip);
+            //e.printStackTrace();
         } catch (Exception e) {
-            e.printStackTrace();
+            //e.printStackTrace();
+            Log.d(TAG, "UnknownHost, exception for ip:" + ip);
         }
 
         return socket;
     }
 
     public static Connection createConnectionSync(String ip, int port) {
+        Log.d(TAG, "createConnectionSync:" + ip + ", port:" + port);
         Socket socket = createSocket(ip, port);
 
         Connection conn = null;

@@ -14,6 +14,9 @@ import com.assistant.utils.Utils;
  * Handler server search.
  */
 public class HostSearchHandler {
+    // TODO: this is only used for local testing..., set to false when testing and publish.
+    private static final boolean DEBUG = true;
+
     public static final int SERVER_SEARCH_FAILED_WIFI_NOT_CONNECTED = 1;
     public static final int SERVER_SEARCH_CANCELED = 2;
 
@@ -111,22 +114,15 @@ public class HostSearchHandler {
      */
     public void searchServer(String ipSegment, int port, ServerSearchListener listener) {
         // no listener set, invalid server search action
-        if (listener == null) {
+        if (listener == null || TextUtils.isEmpty(ipSegment) || port <= 0) {
             Log.d(TAG,
-                    "searchServer:listener is null. Invalid server search request!");
+                    "searchServer: input parameters is not valid! listener:" + listener +
+                    ",ipSegment:" + ipSegment + ", port:" + port);
             return;
         }
 
         mPort = port;
         mListener = listener;
-
-        // IPv4: 192.168.1.0
-        NetworkInfoManager networkManager = NetworkInfoManager.getInstance(mContext);
-        if (!networkManager.isWifiConnected()) {
-            mListener.onSearchCanceled(
-                    SERVER_SEARCH_FAILED_WIFI_NOT_CONNECTED);
-            return;
-        }
 
         if (isSearching()) {
             Log.d(TAG, "searchServer, searching...");
@@ -139,10 +135,6 @@ public class HostSearchHandler {
             mThreadPool = new ThreadPool(poolSize);
         }
 
-        if (TextUtils.isEmpty(ipSegment)) {
-            ipSegment = networkManager.getWifiIpAddress().getHostAddress();
-        }
-
         // Get wifi ip address, this ip should ignored when searching server.
         byte[] ip = IPv4Utils.ipToBytesByInet(ipSegment);
         Log.d(TAG, "Wifi Address:" + IPv4Utils.bytesToIp(ip));
@@ -151,6 +143,11 @@ public class HostSearchHandler {
         // mark self ip failed state to avoid search later
         int index = Utils.byteToInt(selfIpByte);
         mSearchIpMask[index] = IP_MARK_CONNECT_FAILED;
+
+        if (DEBUG) {
+            mSearchIpMask[index] = IP_MARK_IDLE;
+            createConnectingTask(ip, port, false);
+        }
 
         // get dhcp server ip and mark as failed to avoid search
         /*byte[] dhcpServerIp = networkManager.getWifiDhcpServerAddress().getAddress();
@@ -196,17 +193,17 @@ public class HostSearchHandler {
         for (int i = start; i < end; i++) {
             ip[3] = (byte) i;
 
-            createConnectingTask(ip, port);
+            createConnectingTask(ip, port, DEBUG? true :false);
         }
 
         for (int i = 0; i < 256; i++) {
             ip[3] = (byte) i;
 
-            createConnectingTask(ip, port);
+            createConnectingTask(ip, port, DEBUG? true :false);
         }
     }
 
-    private void createConnectingTask(final byte ip[], final int port) {
+    private void createConnectingTask(final byte ip[], final int port, final boolean isFake) {
         if (ip.length != 4) {
             Log.e(TAG, "createConnectingTask, ip addrss error:" + Utils.byteToInt(ip[3]));
             return;
@@ -219,48 +216,71 @@ public class HostSearchHandler {
             return;
         }
 
+        if (isFake) {
+            Log.d(TAG, "createConnectingTask, debug mode, not to connect to this ip really! just failed!");
+            setByteIpMask(index, IP_MARK_CONNECT_FAILED);
+
+            // search end. notify failed and do necessary clean
+            if (!hasSearchingMask()) {
+                if (mListener != null) {
+                    mListener.onSearchCompleted();
+                }
+
+                cleanSeachingHandler();
+            }
+            return;
+        }
+
         setByteIpMask(index, IP_MARK_CONNECTING);
 
         Log.d(TAG, "createConnectingTask, create connecting task for ip:" + IPv4Utils.bytesToIp(ip));
 
-        mThreadPool.addTask(new Runnable() {
-            @Override
-            public void run() {
-                Connection connection =
-                        ConnectionFactory.createConnectionSync(IPv4Utils.bytesToIp(ip), port);
+        mThreadPool.addTask(new ConnectionCreateTask(IPv4Utils.bytesToIp(ip),port));
+    }
 
-                if (connection != null) {
-                        String ip = connection.getIp();
+    class ConnectionCreateTask implements Runnable {
+        private String ip;
+        private int port;
 
-                        String CONNECTION_TAG = TAG + "[" + ip + "]";
+        ConnectionCreateTask(String ipAddress, int iPort) {
+            ip = ipAddress;
+            port = iPort;
+        }
 
-                        int state = connection.getState();
-                        Log.d(CONNECTION_TAG, "onConnectingUpdate, ip:" + ip
-                                + ",state:" + state);
+        @Override
+        public void run() {
+            Connection connection =
+                    ConnectionFactory.createConnectionSync(ip, port);
 
-                        if (Connection.CONNECTION_STATE_CONNECTING == state) {
-                            setIpMask(ip, IP_MARK_CONNECTING);
-                        } else if (Connection.CONNECTION_STATE_CONNECTED == state) {
-                            setIpMask(ip, IP_MARK_CONNECTED);
+            if (connection != null) {
+                String CONNECTION_TAG = TAG + "[" + ip + "]";
 
-                            if (mListener != null) {
-                                mListener.onConnectionConnected(connection);
-                            }
-                        }
-                } else {
-                    setIpMask(IPv4Utils.bytesToIp(ip), IP_MARK_CONNECT_FAILED);
-                }
+                int state = connection.getState();
+                Log.d(CONNECTION_TAG, "onConnectingUpdate, ip:" + ip
+                        + ",state:" + state);
 
-                // search end. notify failed and do necessary clean
-                if (!hasSearchingMask()) {
+                if (Connection.CONNECTION_STATE_CONNECTING == state) {
+                    setIpMask(ip, IP_MARK_CONNECTING);
+                } else if (Connection.CONNECTION_STATE_CONNECTED == state) {
+                    setIpMask(ip, IP_MARK_CONNECTED);
+
                     if (mListener != null) {
-                        mListener.onSearchCompleted();
+                        mListener.onConnectionConnected(connection);
                     }
-
-                    cleanSeachingHandler();
                 }
+            } else {
+                setIpMask(ip, IP_MARK_CONNECT_FAILED);
             }
-        });
+
+            // search end. notify failed and do necessary clean
+            if (!hasSearchingMask()) {
+                if (mListener != null) {
+                    mListener.onSearchCompleted();
+                }
+
+                cleanSeachingHandler();
+            }
+        }
     }
 
     public interface ServerSearchListener {

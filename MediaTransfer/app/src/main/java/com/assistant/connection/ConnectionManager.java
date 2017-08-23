@@ -60,14 +60,14 @@ public class ConnectionManager {
 
     private ThreadPool mThreadPool = new ThreadPool(5);
 
-    private ThreadHandler mThreadHandler;
+    private ConnMgrThreadHandler mThreadHandler;
 
     private static final int EVENT_CONNECTION_ADDED = 0;
     private static final int EVENT_CONNECTION_REMOVED = 1;
     private static final int EVENT_CONNECTION_DATA_RECEIVED = 2;
 
-    class ThreadHandler extends Handler {
-        public ThreadHandler(Looper looper) {
+    class ConnMgrThreadHandler extends Handler {
+        public ConnMgrThreadHandler(Looper looper) {
             super(looper);
         }
 
@@ -103,8 +103,11 @@ public class ConnectionManager {
         mContext = context;
 
         HandlerThread thread = new HandlerThread("connectionManager");
+        thread.start();
 
-        mThreadHandler = new ThreadHandler(thread.getLooper());
+        if (thread != null) {
+            mThreadHandler = new ConnMgrThreadHandler(thread.getLooper());
+        }
     }
 
     public void addConnection(final Connection connection) {
@@ -134,17 +137,30 @@ public class ConnectionManager {
     }
 
     public Integer[] getConnectionIds() {
-        return (Integer[])mConnections.keySet().toArray();
+        Integer[] ret;
+        synchronized (mConnections) {
+            Set<Integer> keySet = mConnections.keySet();
+
+            Integer[] keyArray = new Integer[keySet.size()];
+            ret = keySet.toArray(keyArray);
+        }
+
+        return ret;
     }
 
     private Integer generateConnectionId() {
-        Integer[] keys = (Integer[])mConnections.keySet().toArray();
-
         int maxKey = -1;
 
-        for (int i = 0; i < keys.length ; i ++) {
-            if (maxKey < keys[i]) {
-                maxKey = keys[i];
+        synchronized (mConnections) {
+            Integer[] keys = getConnectionIds();
+            if (keys == null) {
+                return 0;
+            }
+
+            for (int i = 0; i < keys.length; i++) {
+                if (maxKey < keys[i]) {
+                    maxKey = keys[i];
+                }
             }
         }
 
@@ -640,7 +656,7 @@ public class ConnectionManager {
                 }
             };
 
-    private void listen(int port) {
+    public void listen(int port) {
         final HostConnection hostConnection =
                 ConnectionFactory.createHostConnection(port, mHostListener);
 

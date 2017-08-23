@@ -4,6 +4,7 @@ import android.content.Context;
 import android.text.TextUtils;
 
 import com.assistant.connection.ConnectionManager;
+import com.assistant.utils.Log;
 
 /**
  * Created by alex on 17-8-21.
@@ -31,11 +32,17 @@ public class MediaTransferManager {
         mConnectionManager = ConnectionManager.getInstance(context);
     }
 
+    public int getDefaultPort() {
+        return mDefaultPort;
+    }
+
     public void startSearchHost(ConnectionManager.SearchListener listener) {
         NetworkInfoManager networkInfoManager = NetworkInfoManager.getInstance(mContext);
         String ip = networkInfoManager.getWifiIpAddressString();
 
-        if (TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected()) {
+        Log.d(this, "startSearchHost, ip:" + ip +
+                ", wifi connected:" + networkInfoManager.isWifiConnected());
+        if (!TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected()) {
             mConnectionManager.searchHost(ip, mDefaultPort, listener);
         } else {
             listener.onSearchCompleted();

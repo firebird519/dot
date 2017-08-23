@@ -3,6 +3,8 @@ package com.assistant.ui.fragment;
 import android.app.Fragment;
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,6 +17,8 @@ import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
 import com.assistant.mediatransfer.ClientInfo;
 import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.utils.Log;
+import com.assistant.view.CircleIndicatorView;
 
 import org.w3c.dom.Text;
 
@@ -28,7 +32,23 @@ public class ClientListFragment extends Fragment {
     private ListView mListView;
     private TextView mIndicatorTextView;
     private ConnectionManager mConnManager;
+    private MediaTransferManager mMediaTransferManager;
     private LayoutInflater mLayoutInflater = null;
+
+    private static final int EVENT_CANCEL_INDICATION = 0;
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case EVENT_CANCEL_INDICATION:
+                    hideIndicatorText();
+                    break;
+                default:
+                    break;
+            }
+            super.handleMessage(msg);
+        }
+    };
 
     @Nullable
     @Override
@@ -54,24 +74,30 @@ public class ClientListFragment extends Fragment {
         mConnManager = ConnectionManager.getInstance(getActivity().getApplicationContext());
         mLayoutInflater = (LayoutInflater) getActivity()
                 .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        mMediaTransferManager = MediaTransferManager.getInstance(
+                getActivity().getApplicationContext());
+
+        mConnManager.listen(mMediaTransferManager.getDefaultPort());
     }
 
     @Override
     public void onResume() {
-        MediaTransferManager.getInstance(getActivity()).startSearchHost(
+        showIndicatorText(R.string.searching);
+
+        mMediaTransferManager.startSearchHost(
                 new ConnectionManager.SearchListener() {
             @Override
             public void onSearchCompleted() {
-                hideIndicatorText();
+                Log.d(this, "onSearchCompleted");
+                mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
             }
 
             @Override
             public void onSearchCanceled(int reason) {
-                hideIndicatorText();
+                Log.d(this, "onSearchCanceled");
+                mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
             }
         });
-
-        showIndicatorText(R.string.searching);
 
         super.onResume();
     }
@@ -82,18 +108,19 @@ public class ClientListFragment extends Fragment {
     }
 
     private void showIndicatorText(int resId) {
+        Log.d(this, "showIndicatorText");
         mIndicatorTextView.setText(resId);
         mIndicatorTextView.setVisibility(View.VISIBLE);
     }
 
     private void hideIndicatorText() {
+        Log.d(this, "hideIndicatorText");
         mIndicatorTextView.setText("");
         mIndicatorTextView.setVisibility(View.INVISIBLE);
     }
 
     class ClientListAdapter extends BaseAdapter {
         Integer[] mConnKeys = null;
-
 
         @Override
         public int getCount() {
@@ -157,6 +184,7 @@ public class ClientListFragment extends Fragment {
             }
 
             holder.clientNameView.setText(name);
+            holder.circleIndicatorView.invalidate();
 
             return view;
         }
@@ -164,9 +192,11 @@ public class ClientListFragment extends Fragment {
 
     static class ViewHolder {
         TextView clientNameView;
+        CircleIndicatorView circleIndicatorView;
 
         public ViewHolder(View view) {
             clientNameView = (TextView) view.findViewById(R.id.client_name);
+            circleIndicatorView = (CircleIndicatorView) view.findViewById(R.id.indicator_text);
         }
     }
 }

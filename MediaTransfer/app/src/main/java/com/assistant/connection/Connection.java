@@ -101,6 +101,7 @@ public class Connection {
         mThreadPool = new ThreadPool(2);
 
         HandlerThread thread = new HandlerThread("connectionHandlerThread");
+        thread.start();
         mThreadHandler = new Handler(thread.getLooper()) {
             @Override
             public void handleMessage(Message msg) {
@@ -157,7 +158,7 @@ public class Connection {
      * return: data size sent or failed code for sending.
      */
     public int send(final byte[] data, final long size) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
             throw new NetworkOnMainThreadException();
         }
 
@@ -228,7 +229,7 @@ public class Connection {
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
 
-        if (Looper.myLooper() != Looper.getMainLooper()) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
             throw new NetworkOnMainThreadException();
         }
 
