@@ -11,7 +11,7 @@ import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import mediatransfer.assistant.com.mediatransfer.R;
+import com.assistant.R;
 
 public class ChattingFragment extends Fragment {
     private ListView mChattingListView;

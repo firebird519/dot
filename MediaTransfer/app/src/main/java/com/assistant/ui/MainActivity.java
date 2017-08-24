@@ -19,7 +19,8 @@ import java.util.List;
 import yalantis.com.sidemenu.interfaces.Resourceble;
 import yalantis.com.sidemenu.model.SlideMenuItem;
 
-import mediatransfer.assistant.com.mediatransfer.R;
+import com.assistant.R;
+
 import yalantis.com.sidemenu.util.SideMenu;
 
 public class MainActivity extends AppCompatActivity {

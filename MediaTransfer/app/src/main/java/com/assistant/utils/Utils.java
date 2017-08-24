@@ -11,7 +11,9 @@ import java.io.File;
 
 public class Utils {
     public static final String DCIM = "DCIM";
-    private static final boolean DEBUG = true;
+
+    //TODO: change to false for official release.
+    public static final boolean DEBUG = true;
 
     public static int byteToInt(byte b) {
         int i = b & 0xff;

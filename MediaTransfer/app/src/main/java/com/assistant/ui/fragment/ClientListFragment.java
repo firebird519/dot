@@ -1,7 +1,9 @@
 package com.assistant.ui.fragment;
 
+import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -9,6 +11,8 @@ import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AbsListView;
+import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -17,12 +21,15 @@ import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
 import com.assistant.mediatransfer.ClientInfo;
 import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.ui.ChattingActivity;
+import com.assistant.ui.view.CircleIndicatorView;
 import com.assistant.utils.Log;
-import com.assistant.view.CircleIndicatorView;
 
-import org.w3c.dom.Text;
+import com.assistant.R;
 
-import mediatransfer.assistant.com.mediatransfer.R;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
 
 /**
  * Created by liyong on 17-8-17.
@@ -34,6 +41,8 @@ public class ClientListFragment extends Fragment {
     private ConnectionManager mConnManager;
     private MediaTransferManager mMediaTransferManager;
     private LayoutInflater mLayoutInflater = null;
+
+    private Activity mActivity;
 
     private static final int EVENT_CANCEL_INDICATION = 0;
     private Handler mHandler = new Handler() {
@@ -65,11 +74,23 @@ public class ClientListFragment extends Fragment {
         mIndicatorTextView = (TextView)view.findViewById(R.id.indicator_text);
 
         mListView.setAdapter(new ClientListAdapter());
+
+        mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Intent intent = new Intent();
+                intent.setClass(mActivity, ChattingActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                mActivity.startActivity(intent);
+            }
+        });
     }
 
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+
+        mActivity = getActivity();
 
         mConnManager = ConnectionManager.getInstance(getActivity().getApplicationContext());
         mLayoutInflater = (LayoutInflater) getActivity()
@@ -184,7 +205,17 @@ public class ClientListFragment extends Fragment {
             }
 
             holder.clientNameView.setText(name);
-            holder.circleIndicatorView.invalidate();
+
+
+            SimpleDateFormat formatter = new SimpleDateFormat("MM月dd日 HH:mm:ss");
+            Date curDate = new Date(System.currentTimeMillis());//获取当前时间
+            String str = formatter.format(curDate);
+
+            holder.lastMsgTimeView.setText(str);
+
+            holder.lastMsgSummaryView.setText("message summary");
+
+            holder.circleIndicatorView.setText(String.valueOf(position));
 
             return view;
         }
@@ -192,10 +223,14 @@ public class ClientListFragment extends Fragment {
 
     static class ViewHolder {
         TextView clientNameView;
+        TextView lastMsgTimeView;
+        TextView lastMsgSummaryView;
         CircleIndicatorView circleIndicatorView;
 
         public ViewHolder(View view) {
             clientNameView = (TextView) view.findViewById(R.id.client_name);
+            lastMsgTimeView = (TextView) view.findViewById(R.id.last_msg_time);
+            lastMsgSummaryView = (TextView) view.findViewById(R.id.last_msg_summary);
             circleIndicatorView = (CircleIndicatorView) view.findViewById(R.id.indicator_text);
         }
     }

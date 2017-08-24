@@ -4,9 +4,9 @@ android {
     compileSdkVersion 25
     buildToolsVersion '25.0.0'
     defaultConfig {
-        applicationId "mediatransfer.assistant.com.mediatransfer"
+        applicationId "com.assistant"
         minSdkVersion 19
-        targetSdkVersion 26
+        targetSdkVersion 23
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
