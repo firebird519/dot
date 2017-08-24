@@ -17,6 +17,7 @@ import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.assistant.bytestring.ByteString;
 import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
 import com.assistant.mediatransfer.ClientInfo;
@@ -37,6 +38,8 @@ import java.util.Date;
 
 public class ClientListFragment extends Fragment {
     private ListView mListView;
+    private ClientListAdapter mClientListAdapter;
+
     private TextView mIndicatorTextView;
     private ConnectionManager mConnManager;
     private MediaTransferManager mMediaTransferManager;
@@ -45,12 +48,16 @@ public class ClientListFragment extends Fragment {
     private Activity mActivity;
 
     private static final int EVENT_CANCEL_INDICATION = 0;
+    private static final int EVENT_CONNECTION_LIST_UPDATED = 1;
     private Handler mHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case EVENT_CANCEL_INDICATION:
                     hideIndicatorText();
+                    break;
+                case EVENT_CONNECTION_LIST_UPDATED:
+                    mClientListAdapter.notifyDataSetChanged();
                     break;
                 default:
                     break;
@@ -73,7 +80,8 @@ public class ClientListFragment extends Fragment {
         mListView = (ListView) view.findViewById(R.id.client_list_view);
         mIndicatorTextView = (TextView)view.findViewById(R.id.indicator_text);
 
-        mListView.setAdapter(new ClientListAdapter());
+        mClientListAdapter = new ClientListAdapter();
+        mListView.setAdapter(mClientListAdapter);
 
         mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
@@ -98,7 +106,23 @@ public class ClientListFragment extends Fragment {
         mMediaTransferManager = MediaTransferManager.getInstance(
                 getActivity().getApplicationContext());
 
+
         mConnManager.listen(mMediaTransferManager.getDefaultPort());
+
+        mConnManager.addListener(new ConnectionManager.ConnectionManagerListener() {
+            @Override
+            public void onConnectionAdded(int id) {
+                mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
+            }
+
+            @Override
+            public void onConnectionRemoved(int id, int reason) {
+                mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
+            }
+
+            @Override
+            public void onDataReceived(int id, ByteString data, boolean isFile) {}
+        });
     }
 
     @Override

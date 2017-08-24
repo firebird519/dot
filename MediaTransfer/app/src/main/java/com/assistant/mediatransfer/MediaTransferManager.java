@@ -3,8 +3,10 @@ package com.assistant.mediatransfer;
 import android.content.Context;
 import android.text.TextUtils;
 
+import com.assistant.bytestring.ByteString;
 import com.assistant.connection.ConnectionManager;
 import com.assistant.utils.Log;
+import com.google.gson.Gson;
 
 /**
  * Created by alex on 17-8-21.
@@ -26,10 +28,26 @@ public class MediaTransferManager {
 
     private int mDefaultPort = 8989;
 
+    private ConnectionManager.ConnectionManagerListener mConnectionMgrListener =
+            new ConnectionManager.ConnectionManagerListener() {
+        @Override
+        public void onConnectionAdded(int id) {}
+
+        @Override
+        public void onConnectionRemoved(int id, int reason) {}
+
+        @Override
+        public void onDataReceived(int id, ByteString data, boolean isFile) {
+            Gson gson = new Gson();
+
+        }
+    };
+
     MediaTransferManager(Context context) {
         mContext = context;
 
         mConnectionManager = ConnectionManager.getInstance(context);
+        mConnectionManager.addListener(mConnectionMgrListener);
     }
 
     public int getDefaultPort() {

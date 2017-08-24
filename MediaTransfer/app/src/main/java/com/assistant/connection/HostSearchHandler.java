@@ -231,11 +231,19 @@ public class HostSearchHandler {
             return;
         }
 
+        String ipAddress = IPv4Utils.bytesToIp(ip);
+
+        if (ConnectionManager.getInstance(mContext).isIpConnected(ipAddress)) {
+            Log.d(TAG, "ip:" + ipAddress + "already connected!");
+            setByteIpMask(index, IP_MARK_CONNECTED);
+            return;
+        }
+
         setByteIpMask(index, IP_MARK_CONNECTING);
 
-        Log.d(TAG, "createConnectingTask, create connecting task for ip:" + IPv4Utils.bytesToIp(ip));
+        Log.d(TAG, "createConnectingTask, create connecting task for ip:" + ipAddress);
 
-        mThreadPool.addTask(new ConnectionCreateTask(IPv4Utils.bytesToIp(ip),port));
+        mThreadPool.addTask(new ConnectionCreateTask(ipAddress,port));
     }
 
     class ConnectionCreateTask implements Runnable {

@@ -12,6 +12,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 import com.assistant.R;
+import com.assistant.utils.Log;
 
 public class ChattingFragment extends Fragment {
     private ListView mChattingListView;
@@ -34,6 +35,8 @@ public class ChattingFragment extends Fragment {
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        Log.d(this, "onViewCreated");
+
         mChattingListView = (ListView)view.findViewById(R.id.chatting_list_view);
 
         mChattingListView.setAdapter(new ChattingAdapter());
@@ -52,6 +55,7 @@ public class ChattingFragment extends Fragment {
 
         @Override
         public View getView(int position, View convertView, ViewGroup container) {
+            Log.d(this, "getView, position:" + position);
             if (convertView == null) {
                 convertView = mLayoutInflater.inflate(R.layout.chatting_item, container, false);
             }

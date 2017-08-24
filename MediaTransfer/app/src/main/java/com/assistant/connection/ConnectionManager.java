@@ -148,6 +148,18 @@ public class ConnectionManager {
         return ret;
     }
 
+    public boolean isIpConnected(String ip) {
+        synchronized (mConnections) {
+            for (Connection conn : mConnections.values()) {
+                if (TextUtils.equals(conn.getIp(), ip)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private Integer generateConnectionId() {
         int maxKey = -1;
 

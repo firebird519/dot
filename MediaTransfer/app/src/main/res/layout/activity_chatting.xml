@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
     <fragment
-        android:name="com.assistant.ui.ChattingActivity"
+        android:id="@+id/chatting_fragment"
+        android:name="com.assistant.ui.fragment.ChattingFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-
     </fragment>
-</LinearLayout>
+</RelativeLayout>
