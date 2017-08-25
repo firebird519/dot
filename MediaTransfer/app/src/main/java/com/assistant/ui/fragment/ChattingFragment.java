@@ -64,7 +64,7 @@ public class ChattingFragment extends Fragment {
                     .setText(getItem(position));
 
             ((TextView) convertView.findViewById(R.id.content))
-                    .setText(getItem(position) + "content");
+                    .setText(getItem(position) + "\ncontent\n");
             return convertView;
         }
 

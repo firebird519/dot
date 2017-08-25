@@ -102,7 +102,8 @@ public class HostConnection {
                     }
 
                     if (socket != null) {
-                        mHandler.obtainMessage(EVENT_SOCKET_CONNECTED, new Connection(socket)).sendToTarget();
+                        mHandler.obtainMessage(EVENT_SOCKET_CONNECTED, new Connection(socket, true)).
+                                sendToTarget();
                     }
                 }
             }

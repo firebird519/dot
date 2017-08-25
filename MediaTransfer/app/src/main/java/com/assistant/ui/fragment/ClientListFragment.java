@@ -109,7 +109,7 @@ public class ClientListFragment extends Fragment {
 
         mConnManager.listen(mMediaTransferManager.getDefaultPort());
 
-        mConnManager.addListener(new ConnectionManager.ConnectionManagerListener() {
+        mConnManager.addListener(new ConnectionManager.ConnectionManagerListenerBase() {
             @Override
             public void onConnectionAdded(int id) {
                 mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
@@ -119,9 +119,6 @@ public class ClientListFragment extends Fragment {
             public void onConnectionRemoved(int id, int reason) {
                 mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
             }
-
-            @Override
-            public void onDataReceived(int id, ByteString data, boolean isFile) {}
         });
     }
 

@@ -73,6 +73,13 @@ public class Connection {
 
     private int mId = -1;
 
+    // TODO: this uniqueId should be always same for same client.
+    // which should be sent to each other when connected.
+    // CURRENT STEP1: we only try to make sure it's unique for all connections.
+    private String mUniqueId;
+
+    private boolean mIsHost;
+
     private boolean mIsDataSending;
     private boolean mIsDataReceiving;
 
@@ -82,10 +89,11 @@ public class Connection {
 
     private static final int HEART_BEAT_TIMESTAMP = 5*60*1000; //5 min
 
-    Handler mThreadHandler;
+    private Handler mThreadHandler;
 
-    public Connection(Socket socket) {
+    public Connection(Socket socket, boolean isHost) {
         mSocket = socket;
+        mIsHost = isHost;
 
         if (socket != null) {
             if (socket.isConnected()) {
@@ -129,10 +137,23 @@ public class Connection {
 
     public void setId(final int id) {
         mId = id;
+        mUniqueId = System.currentTimeMillis() + ":" + mId;
     }
 
     public int getId() {
         return mId;
+    }
+
+    public void setUniqueId(String uniqueId) {
+        mUniqueId = uniqueId;
+    }
+
+    public String getUniqueId() {
+        return mUniqueId;
+    }
+
+    public boolean isHost() {
+        return mIsHost;
     }
 
     public void setConnData(Object info) {
@@ -258,7 +279,6 @@ public class Connection {
             try {
                 receivedEverytime = mSocketInputStream.read(buf, receivedCount, (int)bufSize - receivedCount);
             } catch (IOException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
 
                 closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
@@ -288,11 +308,9 @@ public class Connection {
         try {
             mSocket = SocketFactory.getDefault().createSocket(ip, port);
         } catch (UnknownHostException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
             notifyConnectFailed(CONNECTION_REASON_CODE_UNKNOWN_HOST);
         } catch (IOException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
             notifyConnectFailed(CONNECTION_REASON_CODE_IO_EXCEPTION);
         }
@@ -342,7 +360,6 @@ public class Connection {
                     try {
                         mSocket.sendUrgentData(0xFF);
                     } catch (IOException e1) {
-                        // TODO Auto-generated catch block
                         e1.printStackTrace();
 
                         closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);

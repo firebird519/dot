@@ -66,7 +66,6 @@ public class NetworkInfoManager {
         try {
             address = InetAddress.getByName(getWifiIpAddressString());
         } catch (UnknownHostException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
 
@@ -83,7 +82,6 @@ public class NetworkInfoManager {
     		
 
 		} catch (UnknownHostException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (RuntimeException re) {
 			re.printStackTrace();
@@ -111,7 +109,7 @@ public class NetworkInfoManager {
         return dhcpInfo.serverAddress;
     }
 
-    // TODO: need change to one common one
+    // TODO: need change name to one common one
     // only support IPv4 address
     @SuppressWarnings("deprecation")
     public String getWifiDhcpServerAddressString() {
@@ -126,7 +124,6 @@ public class NetworkInfoManager {
         try {
             address = InetAddress.getByName(getWifiDhcpServerAddressString());
         } catch (UnknownHostException e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
         }
 

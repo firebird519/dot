@@ -41,13 +41,32 @@ public class ConnectionManager {
     public static int DATA_HEADER_LEN_v1 = 22;
     public static int DATA_HEADER_V1 = 1;
 
+    public static final int DEFAULT_PORT = 8671;
+
     private Context mContext;
 
     public interface ConnectionManagerListener {
         void onConnectionAdded(int id);
         void onConnectionRemoved(int id, int reason);
 
-        void onDataReceived(int id, ByteString data, boolean isFile);
+        void onDataReceived(int id, String data, boolean isFile);
+    }
+
+    public static class ConnectionManagerListenerBase implements ConnectionManagerListener {
+        @Override
+        public void onConnectionAdded(int id) {
+            Log.d(this, "ConnectionManagerListenerBase.onConnectionAdded");
+        }
+
+        @Override
+        public void onConnectionRemoved(int id, int reason) {
+            Log.d(this, "ConnectionManagerListenerBase.onConnectionRemoved");
+        }
+
+        @Override
+        public void onDataReceived(int id, String data, boolean isFile) {
+            Log.d(this, "ConnectionManagerListenerBase.onDataReceived");
+        }
     }
 
     private Set<ConnectionManagerListener> mListeners =
@@ -81,7 +100,7 @@ public class ConnectionManager {
                     notifyConnectionRemoved(msg.arg1, msg.arg2);
                     break;
                 case EVENT_CONNECTION_DATA_RECEIVED:
-                    notifyDataReceived(msg.arg1, (ByteString)msg.obj, (msg.arg2 == 1));
+                    notifyDataReceived(msg.arg1, (String)msg.obj, (msg.arg2 == 1));
                     break;
                 default:
                     break;
@@ -211,7 +230,7 @@ public class ConnectionManager {
         }
     }
 
-    private void notifyDataReceived(int connId, ByteString data, boolean isFile) {
+    private void notifyDataReceived(int connId, String data, boolean isFile) {
         for(ConnectionManagerListener listener : mListeners) {
             listener.onDataReceived(connId, data, isFile);
         }
@@ -257,11 +276,13 @@ public class ConnectionManager {
                     }
                 }
 
-                if (success) {
-                    listener.onSendProgress(100);
-                    listener.onResult(DATA_SEND_SUCESS, ret);
-                } else {
-                    listener.onResult(DATA_SEND_FAILED, ret);
+                if (listener != null) {
+                    if (success) {
+                        listener.onSendProgress(100);
+                        listener.onResult(DATA_SEND_SUCESS, ret);
+                    } else {
+                        listener.onResult(DATA_SEND_FAILED, ret);
+                    }
                 }
             }
         });
@@ -424,7 +445,8 @@ public class ConnectionManager {
                             Message msg = mThreadHandler.obtainMessage(
                                     EVENT_CONNECTION_DATA_RECEIVED, mConnection.getId(), 0);
 
-                            msg.obj = buf;
+                            msg.obj = buf.toString();
+                            buf.release();
                             msg.sendToTarget();
                         } else {
                             closeConnection();
@@ -445,7 +467,8 @@ public class ConnectionManager {
                                 mConnection.getId(),
                                 (mFileLen > ByteString.DEFAULT_STRING_SIZE ? 1 : 0));
 
-                        msg.obj = buf;
+                        msg.obj = buf.toString();
+                        buf.release();
                         msg.sendToTarget();
                     } else {
                         closeConnection();

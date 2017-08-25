@@ -27,7 +27,7 @@ public class ConnectionFactory {
 
     public static Connection createConnection(String ip, int port,
                                               Connection.ConnectionListener listener) {
-        Connection conn = new Connection(null);
+        Connection conn = new Connection(null, false);
 
         if (conn != null) {
             conn.addListner(listener);
@@ -64,7 +64,7 @@ public class ConnectionFactory {
 
         Connection conn = null;
         if (socket != null && socket.isConnected()) {
-            conn = new Connection(socket);
+            conn = new Connection(socket, false);
         }
 
         return conn;

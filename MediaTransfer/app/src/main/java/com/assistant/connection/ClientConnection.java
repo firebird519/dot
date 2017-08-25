@@ -20,7 +20,7 @@ public class ClientConnection extends Connection {
     }
 
     ClientConnection(Socket socket) {
-        super(socket);
+        super(socket, false);
     }
 
     // TODO: considering put it to other places.
