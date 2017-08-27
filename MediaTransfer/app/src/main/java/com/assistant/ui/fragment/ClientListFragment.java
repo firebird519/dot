@@ -11,16 +11,14 @@ import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AbsListView;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import com.assistant.bytestring.ByteString;
 import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
-import com.assistant.mediatransfer.ClientInfo;
+import com.assistant.mediatransfer.events.ClientInfo;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.ChattingActivity;
 import com.assistant.ui.view.CircleIndicatorView;
@@ -29,7 +27,6 @@ import com.assistant.utils.Log;
 import com.assistant.R;
 
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
 import java.util.Date;
 
 /**

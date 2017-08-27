@@ -7,17 +7,12 @@ import android.os.Looper;
 import android.os.Message;
 import android.text.TextUtils;
 
-import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
 import com.assistant.datastorage.SharePreferencesHelper;
+import com.assistant.mediatransfer.events.ChatMessageEvent;
+import com.assistant.mediatransfer.events.ClientInfo;
 import com.assistant.utils.Log;
-import com.google.gson.Gson;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 public class MediaTransferManager {
@@ -32,7 +27,7 @@ public class MediaTransferManager {
 
     public interface MediaTransferListener {
         void onClientConnected(int id, ClientInfo info);
-        void onChatMsgComing(int clientId, ChatMessage msg);
+        void onChatMsgComing(int clientId, ChatMessageEvent msg);
         void onChatMsgSendingResult(int clientId, int msgId, boolean isSuccess);
     }
 
@@ -44,65 +39,8 @@ public class MediaTransferManager {
 
     private ClientInfo mClientInfo;
 
-    private Gson mGson = new Gson();
-
-    private NetCommandHelper mNetCommandHelper = new NetCommandHelper();
+    private NetEventHandler mNetCommandHelper;
     private SharePreferencesHelper mSharePreferencesHelper;
-
-    // key string is unique id of one connection.
-    private Map<String, Object> mMsgCollections =
-            Collections.synchronizedMap(new HashMap<String, Object>(10));
-
-    // TODO: move to command helper.
-    private ConnectionManager.ConnectionManagerListener mConnectionMgrListener =
-            new ConnectionManager.ConnectionManagerListenerBase() {
-        @Override
-        public void onDataReceived(int id, String data, boolean isFile) {
-            if (!isFile) {
-                NetCommand cmd = mNetCommandHelper.parserNetCommand(data);
-
-                switch (cmd.command) {
-                    case NetCommand.COMMAND_CLIENT_INFO:
-                        ClientInfo clientInfo = mNetCommandHelper.parserClientInfo(cmd.jsonData);
-
-                        Connection connection = mConnectionManager.getConnection(id);
-                        if (connection != null) {
-                            connection.setConnData(clientInfo);
-                            List<ChatMessage> mMsgArray =
-                                    Collections.synchronizedList(new ArrayList<ChatMessage>());
-
-                            mMsgCollections.put(clientInfo.uniqueId, mMsgArray);
-
-                            // when connection connected, client send info to host side first.
-                            // host side will send info back after received client info.
-                            if (connection.isHost()) {
-                                byte[] response =
-                                        mNetCommandHelper.toNetCommandJson(mClientInfo);
-
-                                mConnectionManager.sendData(id, response, response.length,
-                                        new ConnectionManager.DataSendListener() {
-                                    @Override
-                                    public void onSendProgress(int percent) {}
-
-                                    @Override
-                                    public void onResult(int ret, int failedReason) {
-
-                                    }
-                                });
-                            }
-                        }
-                        break;
-                    case NetCommand.COMMAND_TEXT:
-                        // notify to UI.
-                        break;
-                    case NetCommand.COMMAND_FILE:
-                        break;
-                }
-            } else {
-                // TODO: to be implemented
-            }
-        }
-    };
 
     private MThreadHandler mThreadHandler;
 
@@ -131,7 +69,8 @@ public class MediaTransferManager {
         mSharePreferencesHelper = new SharePreferencesHelper(context);
 
         mConnectionManager = ConnectionManager.getInstance(context);
-        mConnectionManager.addListener(mConnectionMgrListener);
+
+        mNetCommandHelper = new NetEventHandler(this, mConnectionManager);
 
         HandlerThread thread = new HandlerThread("MediaTransferManager");
         thread.start();

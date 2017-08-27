@@ -29,7 +29,7 @@ import javax.net.SocketFactory;
  *      j: json length. long type.
  *      f: file length. long type.
  *
- * [json content]: command or file header.
+ * [json content]: name or file header.
  * [file content]: file content if have.
  */
 

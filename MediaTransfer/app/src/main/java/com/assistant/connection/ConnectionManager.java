@@ -236,11 +236,110 @@ public class ConnectionManager {
         }
     }
 
-    public static final int DATA_SEND_SUCESS = 0;
-    public static final int DATA_SEND_FAILED = -1;
-    public interface DataSendListener {
-        void onSendProgress(int percent);
-        void onResult(int ret, int failedReason);
+    class EventSendRunnable implements Runnable {
+        private int connId;
+        private byte[] bytes;
+        private long bytesLen;
+        private long eventId;
+        private DataSendListener listener;
+        private String filePathName;
+        EventSendRunnable(final int connectionId,
+                          final long sendEventId,
+                          final byte[] jsonBytes,
+                          final long jsonLen,
+                          final String strFilePathName,
+                          final DataSendListener sendListener) {
+            connId = connectionId;
+            bytes = jsonBytes;
+            bytesLen = jsonLen;
+            eventId = sendEventId;
+            filePathName = strFilePathName;
+            listener = sendListener;
+        }
+        @Override
+        public void run() {
+            Connection conn = getConnection(connId);
+            int ret = 0;
+            boolean success = false;
+
+            if (conn != null) {
+                if (TextUtils.isEmpty(filePathName)) {
+                    byte[] header = generateDataHeader(bytesLen, 0);
+
+                    ret = conn.send(header, DATA_HEADER_LEN_v1);
+                    if (ret == DATA_HEADER_LEN_v1) {
+                        ret = conn.send(bytes, bytesLen);
+
+                        if (ret == bytesLen) {
+                            success = true;
+                        }
+                    }
+                }
+
+                if (listener != null) {
+                    if (success) {
+                        listener.onSendProgress(eventId, 100);
+                        listener.onResult(eventId, DataSendListener.RESULT_SUCESS, ret);
+                    } else {
+                        listener.onResult(eventId, DataSendListener.RESULT_FAILED, ret);
+                    }
+                }
+            } else {
+                FileInputStream fileInputStream;
+                try {
+                    fileInputStream = new FileInputStream(filePathName);
+                    int fileLen = fileInputStream.available();
+
+                    byte[] header = generateDataHeader(bytesLen, fileLen);
+
+                    ret = conn.send(header, DATA_HEADER_LEN_v1);
+                    if (ret == DATA_HEADER_LEN_v1) {
+                        ret = conn.send(bytes, bytesLen);
+
+                        if (ret == bytesLen && fileLen > 0) {
+                            int bufferSize =
+                                    fileLen > Connection.SOCKET_DEFAULT_BUF_SIZE ?
+                                            Connection.SOCKET_DEFAULT_BUF_SIZE : fileLen;
+
+                            byte [] buffer = new byte[bufferSize];
+
+                            int sentBytes = 0;
+                            int bytesFileRead;
+                            do {
+                                bytesFileRead = fileInputStream.read(buffer);
+                                ret = conn.send(buffer, bytesFileRead);
+
+                                if (ret == bytesFileRead) {
+
+                                    sentBytes += ret;
+                                    listener.onSendProgress(eventId, (sentBytes * 100)/fileLen);
+                                } else {
+                                    success = false;
+                                    break;
+                                }
+                            } while(sentBytes < fileLen);
+
+                            if (sentBytes == fileLen) {
+                                success = true;
+                            }
+                        } else if (ret == bytesLen) {
+                            listener.onSendProgress(eventId, 100);
+                            success = true;
+                        }
+                    }
+
+                    fileInputStream.close();
+                } catch(Exception e){
+                    e.printStackTrace();
+                }
+
+                if (success) {
+                    listener.onResult(eventId, DataSendListener.RESULT_SUCESS, 0);
+                } else {
+                    listener.onResult(eventId, DataSendListener.RESULT_FAILED, ret);
+                }
+            }
+        }
     }
 
     /**
@@ -251,41 +350,17 @@ public class ConnectionManager {
      * @param jsonLen
      * @param listener
      */
-    public void sendData(final int connId,
-                         final byte[] jsonBytes,
-                         final long jsonLen,
-                         final DataSendListener listener) {
-        mThreadPool.addTask(new Runnable() {
-            @Override
-            public void run() {
-                Connection conn = getConnection(connId);
-                int ret = 0;
-                boolean success = false;
-
-                if (conn != null) {
-                    // TODO: separate to small jsonBytes block for progress if needed?
-                    byte[] header = generateDataHeader(jsonLen, 0);
-
-                    ret = conn.send(header, DATA_HEADER_LEN_v1);
-                    if (ret == DATA_HEADER_LEN_v1) {
-                        ret = conn.send(jsonBytes, jsonLen);
-
-                        if (ret == jsonLen) {
-                            success = true;
-                        }
-                    }
-                }
-
-                if (listener != null) {
-                    if (success) {
-                        listener.onSendProgress(100);
-                        listener.onResult(DATA_SEND_SUCESS, ret);
-                    } else {
-                        listener.onResult(DATA_SEND_FAILED, ret);
-                    }
-                }
-            }
-        });
+    public void sendEvent(final int connId,
+                          final long eventId,
+                          final byte[] jsonBytes,
+                          final long jsonLen,
+                          final DataSendListener listener) {
+        mThreadPool.addTask(new EventSendRunnable(connId,
+                eventId,
+                jsonBytes,
+                jsonLen,
+                "",
+                listener));
     }
 
     /**
@@ -298,76 +373,17 @@ public class ConnectionManager {
      * @param listener
      */
     public void sendFile(final int connId,
+                         final long eventId,
                          final byte[] jsonBytes,
                          final long jsonLen,
                          final String strFilePathName,
                          final DataSendListener listener) {
-        mThreadPool.addTask(new Runnable() {
-            @Override
-            public void run() {
-                Connection conn = getConnection(connId);
-                int ret = 0;
-                boolean success = false;
-
-                if (conn != null) {
-                    FileInputStream fileInputStream;
-                    try {
-                        fileInputStream = new FileInputStream(strFilePathName);
-                        int fileLen = fileInputStream.available();
-
-                        byte[] header = generateDataHeader(jsonLen, fileLen);
-
-                        ret = conn.send(header, DATA_HEADER_LEN_v1);
-                        if (ret == DATA_HEADER_LEN_v1) {
-                            ret = conn.send(jsonBytes, jsonLen);
-
-                            if (ret == jsonLen && fileLen > 0) {
-                                int bufferSize =
-                                        fileLen > Connection.SOCKET_DEFAULT_BUF_SIZE ?
-                                                Connection.SOCKET_DEFAULT_BUF_SIZE : fileLen;
-
-                                byte [] buffer = new byte[bufferSize];
-
-                                int sentBytes = 0;
-                                int bytesFileRead;
-                                do {
-                                    bytesFileRead = fileInputStream.read(buffer);
-                                    ret = conn.send(buffer, bytesFileRead);
-
-                                    if (ret == bytesFileRead) {
-
-                                        sentBytes += ret;
-                                        listener.onSendProgress((sentBytes * 100)/fileLen);
-                                    } else {
-                                        success = false;
-                                        break;
-                                    }
-                                } while(sentBytes < fileLen);
-
-                                if (sentBytes == fileLen) {
-                                    success = true;
-                                }
-                            } else if (ret == jsonLen) {
-                                listener.onSendProgress(100);
-                                success = true;
-                            }
-                        }
-
-                        fileInputStream.close();
-                    } catch(Exception e){
-                        e.printStackTrace();
-                    }
-                } else {
-                    ret = Connection.CONNECTION_REASON_CODE_NOT_CONNECTED;
-                }
-
-                if (success) {
-                    listener.onResult(DATA_SEND_SUCESS, 0);
-                } else {
-                    listener.onResult(DATA_SEND_FAILED, ret);
-                }
-            }
-        });
+        mThreadPool.addTask(new EventSendRunnable(connId,
+                eventId,
+                jsonBytes,
+                jsonLen,
+                strFilePathName,
+                listener));
     }
 
     /**
