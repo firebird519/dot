@@ -34,6 +34,9 @@ import java.util.Date;
  */
 
 public class ClientListFragment extends Fragment {
+
+    private final static String INTENT_EXTRA_CONNECTION_INDEX = "extra_connection_index";
+
     private ListView mListView;
     private ClientListAdapter mClientListAdapter;
 
@@ -86,7 +89,12 @@ public class ClientListFragment extends Fragment {
                 Intent intent = new Intent();
                 intent.setClass(mActivity, ChattingActivity.class);
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                mActivity.startActivity(intent);
+
+                Connection conn = (Connection) mClientListAdapter.getItem(position);
+                if (conn != null) {
+                    intent.putExtra(INTENT_EXTRA_CONNECTION_INDEX, conn.getId());
+                    mActivity.startActivity(intent);
+                }
             }
         });
     }

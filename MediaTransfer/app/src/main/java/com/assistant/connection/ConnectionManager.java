@@ -132,6 +132,13 @@ public class ConnectionManager {
     public void addConnection(final Connection connection) {
         synchronized (mConnections) {
             if (connection != null && !mConnections.containsValue(connection)) {
+                String ipAddress = connection.getIp();
+                if (isIpConnected(ipAddress) && !Utils.DEBUG) {
+                    Log.d(this, "addConnection: ipAddress already connected!");
+                    connection.close();
+                    return;
+                }
+
                 connection.setId(generateConnectionId());
                 mConnections.put(connection.getId(), connection);
                 connection.addListner(new ConnectionListenerImpl(connection));
