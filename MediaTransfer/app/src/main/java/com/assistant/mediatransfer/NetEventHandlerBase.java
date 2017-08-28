@@ -8,6 +8,7 @@ import android.os.SystemClock;
 
 import com.assistant.connection.ConnectionManager;
 import com.assistant.connection.DataSendListener;
+import com.assistant.mediatransfer.events.ClientInfo;
 import com.assistant.mediatransfer.events.Event;
 import com.assistant.mediatransfer.events.NetEvent;
 import com.assistant.mediatransfer.events.VerifyEvent;
@@ -15,6 +16,8 @@ import com.assistant.mediatransfer.events.VerifyEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * Created by alex on 17-8-27.
@@ -106,14 +109,26 @@ public abstract class NetEventHandlerBase {
                 new DataSendListener() {
             @Override
             public void onSendProgress(long eventId, int percent) {
-
+                // TODO:
             }
 
             @Override
             public void onResult(long eventId, int ret, int failedReason) {
-                // TODO: implement
+                Event event = getEventFromToBeVerifiedCache(eventId);
+
+                if (event != null) {
+                    updateEventState(event.connId, event, Event.STATE_SENT);
+                } else {
+
+                }
             }
         });
+        //updateEventState(connId, event, Event.STATE_SENDING);
+    }
+
+    private void updateEventState(int connId, Event event, int state) {
+        event.setState(state);
+        notifyEventStateUpdated(connId, event);
     }
 
     private void handleEventTimeout() {
@@ -123,8 +138,7 @@ public abstract class NetEventHandlerBase {
                 for (Event event : mToBeVerifiedEvents) {
                     sendTime = event.uniqueId;
                     if (SystemClock.elapsedRealtime() - sendTime > 30*1000) {
-                        // TODO: time out
-
+                        updateEventState(event.connId, event, Event.STATE_SENT);
                     }
                 }
             }
@@ -139,6 +153,18 @@ public abstract class NetEventHandlerBase {
                     ThreadHandler.TIMESTAMP_TIMEOUT_CHECK);
 
         }
+    }
+
+    protected Event getEventFromToBeVerifiedCache(long eventId) {
+        synchronized (mToBeVerifiedEvents) {
+            for (Event event : mToBeVerifiedEvents) {
+                if (event.uniqueId == eventId) {
+                    return event;
+                }
+            }
+        }
+
+        return null;
     }
 
     protected void handleEventVerify(VerifyEvent verifyEvent) {
@@ -162,5 +188,39 @@ public abstract class NetEventHandlerBase {
 
     protected void verifyEvent(int connId, String event, long msgIndex) {
         sendEvent(connId, new VerifyEvent(event, msgIndex));
+    }
+
+    private Set<ConnectionEventListener> mListeners =
+            new CopyOnWriteArraySet<>();
+
+    public void addListener(ConnectionEventListener listener) {
+        if (listener != null) {
+            mListeners.add(listener);
+        }
+    }
+
+    public void removeListener(ConnectionEventListener listener) {
+        if (listener != null) {
+            mListeners.remove(listener);
+        }
+    }
+
+    protected void notifyClientAvailable(int connId, ClientInfo info) {
+        for (ConnectionEventListener listener : mListeners) {
+            listener.onClientAvailable(connId, info);
+        }
+
+    }
+
+    protected void notifyEventReceived(int connId, Event event) {
+        for (ConnectionEventListener listener : mListeners) {
+            listener.onEventReceived(connId, event);
+        }
+    }
+
+    protected void notifyEventStateUpdated(int connId, Event event) {
+        for (ConnectionEventListener listener : mListeners) {
+            listener.onEventStateUpdated(connId, event);
+        }
     }
 }

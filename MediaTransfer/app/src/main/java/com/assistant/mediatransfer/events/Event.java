@@ -14,6 +14,15 @@ public abstract class Event {
     @Expose(serialize = false)
     static Gson sGson = new Gson();
 
+    public static final int STATE_SENDING = 0;
+    public static final int STATE_SENT = 1;
+    public static final int STATE_VERIFIED = 2;
+    public static final int STATE_TIMEOUT = 3;
+
+    @Expose(serialize = false)
+    public int mState;
+
+    public int connId; // necessary?
     public long uniqueId = SystemClock.elapsedRealtime();
 
     public String toJsonString() {
@@ -22,6 +31,10 @@ public abstract class Event {
 
     public static <T> T toEvent(String jsonString,  Class<T> cls) {
         return sGson.fromJson(jsonString, cls);
+    }
+
+    public void setState(int state) {
+        mState = state;
     }
 
     public abstract String getEventTypeName();

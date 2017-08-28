@@ -9,6 +9,7 @@ import android.text.TextUtils;
 
 import com.assistant.bytestring.ByteString;
 import com.assistant.bytestring.ByteStringPool;
+import com.assistant.mediatransfer.events.ClientInfo;
 import com.assistant.utils.Log;
 import com.assistant.utils.ThreadPool;
 import com.assistant.utils.Utils;
@@ -154,6 +155,16 @@ public class ConnectionManager {
 
     public Connection getConnection(int id) {
         return mConnections.get(id);
+    }
+
+    public ClientInfo getClientInfo(int connId) {
+        Connection connection = getConnection(connId);
+
+        if (connection != null) {
+            return (ClientInfo) connection.getConnData();
+        }
+
+        return null;
     }
 
     public int getConnectionsCount() {

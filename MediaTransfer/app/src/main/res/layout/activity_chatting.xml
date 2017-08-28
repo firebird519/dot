@@ -5,7 +5,7 @@
 
     <fragment
         android:id="@+id/chatting_fragment"
-        android:name="com.assistant.ui.fragment.ChattingFragment"
+        android:name="com.assistant.ui.fragment.ChatFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
     </fragment>

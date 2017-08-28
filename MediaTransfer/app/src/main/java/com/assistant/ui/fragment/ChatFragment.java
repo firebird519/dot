@@ -5,32 +5,46 @@ import android.app.Fragment;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import com.assistant.R;
 import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
+import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.mediatransfer.events.ChatMessageEvent;
+import com.assistant.mediatransfer.events.ClientInfo;
+import com.assistant.mediatransfer.events.Event;
 import com.assistant.utils.Log;
 
-public class ChattingFragment extends Fragment {
-    private static final String TAG = "ChattingFragment";
+import java.util.List;
+
+public class ChatFragment extends Fragment {
+    private static final String TAG = "ChatFragment";
 
     private final static String INTENT_EXTRA_CONNECTION_INDEX = "extra_connection_index";
 
     private ListView mChattingListView;
+    private ChattingAdapter mChattingAdapter;
 
     private LayoutInflater mLayoutInflater = null;
 
     private Context mContext;
 
     private int mConnId = -1;
-    private ConnectionManager mConnManager;
+    private MediaTransferManager mMediaTransManager;
+    private ConnectionManager mConnectionManager;
+
+    private ClientInfo mConnClientInfo;
+    List<ChatMessageEvent> mChatMessageList;
 
     @Override
     public void onAttach(Context context) {
@@ -66,13 +80,60 @@ public class ChattingFragment extends Fragment {
 
         mChattingListView = (ListView)view.findViewById(R.id.chatting_list_view);
 
-        mChattingListView.setAdapter(new ChattingAdapter());
+        Button btn = (Button)view.findViewById(R.id.msg_send_btn);
+        final EditText editText = (EditText)view.findViewById(R.id.msg_input_view);
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String msg = editText.getText().toString();
+                editText.setText("");
+
+                ChatMessageEvent event =
+                        new ChatMessageEvent(msg,
+                                System.currentTimeMillis(),
+                                mConnId,
+                                mConnClientInfo.uniqueId,
+                                false);
+
+            }
+        });
+
+        mChattingAdapter = new ChattingAdapter();
+        mChattingListView.setAdapter(mChattingAdapter);
+    }
+
+    private void init() {
+        if (mMediaTransManager == null) {
+            mConnectionManager = ConnectionManager.getInstance(mContext.getApplicationContext());
+            mConnClientInfo = mConnectionManager.getClientInfo(mConnId);
+            mMediaTransManager = MediaTransferManager.getInstance(mContext.getApplicationContext());
+
+            mChatMessageList = mMediaTransManager.getMessageList(mConnId);
+
+
+            mChattingListView.setSelection(mChatMessageList.size() - 1);
+
+            mMediaTransManager.addListener(new MediaTransferManager.MediaTransferListener() {
+                @Override
+                public void onClientAvailable(int id, ClientInfo info) {}
+
+                @Override
+                public void onMessageReceived(int clientId, Event msg) {
+                    mChattingAdapter.notifyDataSetChanged();
+                }
+
+                @Override
+                public void onMessageSendResult(int clientId, int msgId, boolean isSuccess) {
+
+                }
+            });
+        }
     }
 
     private class ChattingAdapter extends BaseAdapter {
         @Override
         public int getCount() {
-            return 10;
+            return mChatMessageList != null ? mChatMessageList.size() : 0;
         }
 
         @Override
@@ -96,27 +157,37 @@ public class ChattingFragment extends Fragment {
                 viewHolder = (ViewHolder) convertView.getTag();
             }
 
-            viewHolder.owner.setText("Index:" + String.valueOf(position));
+            ChatMessageEvent event = getItem(position);
+            if (event != null) {
+                // TODO: show connection info in title bar
+                viewHolder.owner.setVisibility(View.GONE);
 
-            String msg = getItem(position) + "\ncontent\n";
+                String msg = event.message;
 
-            if (position%2 == 0) {
-                viewHolder.textMsgLeft.setText(msg);
-                viewHolder.textMsgLeft.setVisibility(View.VISIBLE);
+                if (event.isReceived) {
+                    viewHolder.textMsgLeft.setText(msg);
+                    viewHolder.textMsgLeft.setVisibility(View.VISIBLE);
 
-                viewHolder.textMsgRight.setVisibility(View.GONE);
+                    viewHolder.textMsgRight.setVisibility(View.GONE);
+                } else {
+                    viewHolder.textMsgRight.setText(msg);
+                    viewHolder.textMsgRight.setVisibility(View.VISIBLE);
+
+                    viewHolder.textMsgLeft.setVisibility(View.GONE);
+                    viewHolder.owner.setVisibility(View.INVISIBLE);
+                }
             } else {
-                viewHolder.textMsgRight.setText(msg);
-                viewHolder.textMsgRight.setVisibility(View.VISIBLE);
 
-                viewHolder.textMsgLeft.setVisibility(View.GONE);
-                viewHolder.owner.setVisibility(View.INVISIBLE);
+                // attention dirty data display in textview
+                convertView.setVisibility(View.GONE);
             }
+
+
             return convertView;
         }
 
-        public String getItem(int position) {
-            return String.valueOf(position);
+        public ChatMessageEvent getItem(int position) {
+            return mChatMessageList != null ? mChatMessageList.get(position) : null;
         }
     }
 
@@ -144,9 +215,8 @@ public class ChattingFragment extends Fragment {
         Intent intent = activity.getIntent();
 
         mConnId = intent.getIntExtra(INTENT_EXTRA_CONNECTION_INDEX, -1);
-        mConnManager = ConnectionManager.getInstance(getActivity().getApplicationContext());
 
-
+        init();
     }
 
     @Override

@@ -11,9 +11,13 @@ import com.assistant.connection.ConnectionManager;
 import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.mediatransfer.events.ChatMessageEvent;
 import com.assistant.mediatransfer.events.ClientInfo;
+import com.assistant.mediatransfer.events.Event;
 import com.assistant.utils.Log;
 
+import java.util.ArrayList;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 public class MediaTransferManager {
     private static MediaTransferManager sInstance;
@@ -26,9 +30,9 @@ public class MediaTransferManager {
     }
 
     public interface MediaTransferListener {
-        void onClientConnected(int id, ClientInfo info);
-        void onChatMsgComing(int clientId, ChatMessageEvent msg);
-        void onChatMsgSendingResult(int clientId, int msgId, boolean isSuccess);
+        void onClientAvailable(int id, ClientInfo info);
+        void onMessageReceived(int clientId, Event msg);
+        void onMessageSendResult(int clientId, int msgId, boolean isSuccess);
     }
 
     private Context mContext;
@@ -39,7 +43,7 @@ public class MediaTransferManager {
 
     private ClientInfo mClientInfo;
 
-    private NetEventHandler mNetCommandHelper;
+    private NetEventHandler mNetEventHandler;
     private SharePreferencesHelper mSharePreferencesHelper;
 
     private MThreadHandler mThreadHandler;
@@ -67,10 +71,24 @@ public class MediaTransferManager {
         mContext = context;
 
         mSharePreferencesHelper = new SharePreferencesHelper(context);
-
         mConnectionManager = ConnectionManager.getInstance(context);
 
-        mNetCommandHelper = new NetEventHandler(this, mConnectionManager);
+        mNetEventHandler = new NetEventHandler(this, mConnectionManager);
+        mNetEventHandler.addListener(new ConnectionEventListener() {
+            @Override
+            public void onClientAvailable(int connId, ClientInfo info) {
+                notifyClientAvailable(connId, info);
+            }
+
+            @Override
+            public void onEventReceived(int connId, Event event) {
+                notifyEventReceived(connId, event);
+            }
+
+            @Override
+            public void onEventStateUpdated(int connId, Event event) {
+            }
+        });
 
         HandlerThread thread = new HandlerThread("MediaTransferManager");
         thread.start();
@@ -79,6 +97,17 @@ public class MediaTransferManager {
         mThreadHandler.sendEmptyMessage(MThreadHandler.EVENT_GENERATE_CLIENTINFO);
     }
 
+    public ArrayList<ChatMessageEvent> getMessageList(int connId) {
+        return mNetEventHandler.getMessageList(connId);
+    }
+
+    public int sendMessage(int connId, ChatMessageEvent event) {
+        if (event != null) {
+            mNetEventHandler.sendEvent(connId, event);
+        }
+
+        return 0;
+    }
 
     public int getDefaultPort() {
         return mPort;
@@ -129,5 +158,38 @@ public class MediaTransferManager {
         }
 
         mClientInfo = new ClientInfo(name, uniqueId);
+    }
+
+    private Set<MediaTransferListener> mListeners =
+            new CopyOnWriteArraySet<>();
+
+    public void addListener(MediaTransferListener listener) {
+        if (listener != null) {
+            mListeners.add(listener);
+        }
+    }
+
+    public void removeListener(MediaTransferListener listener) {
+        if (listener != null) {
+            mListeners.remove(listener);
+        }
+    }
+
+    protected void notifyClientAvailable(int connId, ClientInfo info) {
+        for (MediaTransferListener listener : mListeners) {
+            listener.onClientAvailable(connId, info);
+        }
+    }
+
+    protected void notifyEventReceived(int connId, Event event) {
+        for (MediaTransferListener listener : mListeners) {
+            listener.onMessageReceived(connId, event);
+        }
+    }
+
+    protected void notifyMessageSendResult(int connId, int msgId, boolean isSuccess) {
+        for (MediaTransferListener listener : mListeners) {
+            listener.onMessageSendResult(connId, msgId, isSuccess);
+        }
     }
 }

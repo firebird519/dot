@@ -9,10 +9,17 @@ import java.util.Date;
 public class ChatMessageEvent extends Event {
     public int id; // chatMessageId
     public String message;
-    public Date date; // android.os.SystemClock.uptimeMillis();
-    public String userId;// client unique id
-    public int connId; // necessary?
-    public boolean isSent; // if it's true, means it send myself.
+    public long date;
+    public String connUniqueId;//
+
+    public boolean isReceived; // if it's true, means it send myself.
+
+    public ChatMessageEvent(String msg, long date, int connectionId, String userId, boolean received) {
+        message = msg;
+        connId = connectionId;
+        connUniqueId = userId;
+        isReceived = received;
+    }
 
     @Override
     public String getEventTypeName() {
