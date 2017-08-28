@@ -16,9 +16,7 @@ public class Utils {
     public static final boolean DEBUG = true;
 
     public static int byteToInt(byte b) {
-        int i = b & 0xff;
-
-        return i;
+        return b & 0xff;
     }
 
     public static boolean isCharging(Context context) {

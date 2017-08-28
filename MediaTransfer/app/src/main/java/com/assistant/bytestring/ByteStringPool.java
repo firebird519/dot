@@ -36,9 +36,10 @@ public class ByteStringPool {
         }
     }
 
+    // TODO: to be changed later
     public ByteString getByteString() {
         for (int i = 0; i < MAX_SIZE; i ++) {
-            if (pool[i] != null && pool[i].isInUsing() == false) {
+            if (pool[i] != null && !pool[i].isInUsing()) {
 
                 pool[i].incRef();
                 return pool[i];

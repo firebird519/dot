@@ -12,8 +12,6 @@ public class ThreadPool {
     private static final int DEFAULT_MIN_POOL_SIZE = 1;
     private static final int DEFAULT_MAX_POOL_SIZE = 10;
 
-    private int poolSize;
-
     private ExecutorService mExecutor;
 
     private boolean mIsShutdown;
@@ -21,9 +19,8 @@ public class ThreadPool {
     public ThreadPool(int size) {
         if (size < DEFAULT_MIN_POOL_SIZE) size = DEFAULT_MIN_POOL_SIZE;
         if (size > DEFAULT_MAX_POOL_SIZE) size = DEFAULT_MAX_POOL_SIZE;
-        poolSize = size;
 
-        mExecutor = Executors.newFixedThreadPool(poolSize);
+        mExecutor = Executors.newFixedThreadPool(size);
         mIsShutdown = false;
     }
 

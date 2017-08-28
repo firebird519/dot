@@ -25,7 +25,7 @@ public class HostConnection {
     private int mPort;
 
     private Set<HostConnectionListener> mListeners =
-            new CopyOnWriteArraySet<HostConnectionListener>();
+            new CopyOnWriteArraySet<>();
 
     private ServerSocket mServerSocket;
 

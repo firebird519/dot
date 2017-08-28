@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -60,7 +61,7 @@ public class ClientConnection extends Connection {
         FileHeader() {
 
         }
-    };
+    }
 
     private FileHeader createFileHeader(File file) {
         FileHeader header = new FileHeader();
@@ -119,9 +120,8 @@ public class ClientConnection extends Connection {
 
     // TODO: rename?
     private static String getNormalTime(long value) {
-        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        String time = format.format(new Date(value));
-        return time;
+        DateFormat format = SimpleDateFormat.getDateTimeInstance(); //new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        return format.format(new Date(value));
     }
 
 }

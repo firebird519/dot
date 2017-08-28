@@ -41,14 +41,14 @@ public class Connection {
     }
 
     private Set<ConnectionListener> mListeners =
-            new CopyOnWriteArraySet<ConnectionListener>();
+            new CopyOnWriteArraySet<>();
 
     private Socket mSocket;
     private DataOutputStream mSocketOutputStream;
     private DataInputStream mSocketInputStream;
 
-    private Object mSocketOutputStreamLock = new Object();
-    private Object mSocketLock = new Object();
+    private final Object mSocketOutputStreamLock = new Object();
+    private final Object mSocketLock = new Object();
 
     public static final int SOCKET_DEFAULT_BUF_SIZE = 64*1024;
 

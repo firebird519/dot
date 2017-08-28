@@ -26,7 +26,7 @@ public abstract class NetEventHandlerBase {
 
     protected ThreadHandler mThreadHandler;
 
-    private List<Event> mToBeVerifiedEvents =
+    private final List<Event> mToBeVerifiedEvents =
             Collections.synchronizedList(new ArrayList<Event>());
 
     private ConnectionManager.ConnectionManagerListener mConnectionMgrListener =

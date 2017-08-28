@@ -9,7 +9,7 @@ import android.util.Log;
 public class ByteString {
     private static final String TAG = "ByteString";
 
-    private Object mObjLock = new Object();
+    private final Object mObjLock = new Object();
     // use socket default buf size as string default size.
     public static final int DEFAULT_STRING_SIZE = 4*1024;
 

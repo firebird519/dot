@@ -5,8 +5,8 @@ package com.assistant.connection;
  */
 
 public interface DataSendListener {
-    public static final int RESULT_SUCESS = 0;
-    public static final int RESULT_FAILED = -1;
+    int RESULT_SUCESS = 0;
+    int RESULT_FAILED = -1;
 
     void onSendProgress(long eventId, int percent);
     void onResult(long eventId, int result, int failedReason);

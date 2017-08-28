@@ -35,5 +35,5 @@
         android:visibility="visible"
         app:textColor="#FFFFFFFF"
         app:bkColor="#FFFF0000"
-        app:textSize="10sp"/>
+        app:textSize="12sp"/>
 </RelativeLayout>

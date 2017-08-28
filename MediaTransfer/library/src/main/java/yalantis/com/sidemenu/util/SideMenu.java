@@ -97,7 +97,7 @@ public class SideMenu<T extends Resourceble> {
                 public void run() {
                     Log.d(TAG, "show, position:" + position + ", viewList size:" + viewList.size());
                     if (position < viewList.size()) {
-                        animateView((int) position);
+                        animateView(position);
                     }
                     if (position == viewList.size() - 1) {
                         //screenShotable.takeScreenShot();
@@ -200,10 +200,10 @@ public class SideMenu<T extends Resourceble> {
     }
 
     public interface ViewAnimatorListener {
-        public void onItemSelected(Resourceble slideMenuItem, int position);
+        void onItemSelected(Resourceble slideMenuItem, int position);
 
-        public void disableHomeButton();
+        void disableHomeButton();
 
-        public void enableHomeButton();
+        void enableHomeButton();
     }
 }

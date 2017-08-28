@@ -55,11 +55,6 @@ public class NetworkInfoManager {
         return wifiNetInfo.isConnected();
     }
 
-    public String getWifiMacAddress() {
-        WifiInfo wifiInfo = mWifiManager.getConnectionInfo();
-        return (wifiInfo == null) ? "" : wifiInfo.getMacAddress();
-    }
-
     public InetAddress getWifiIpAddress() {
         InetAddress address = null;
 

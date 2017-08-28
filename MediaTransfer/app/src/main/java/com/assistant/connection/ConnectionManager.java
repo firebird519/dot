@@ -70,9 +70,9 @@ public class ConnectionManager {
     }
 
     private Set<ConnectionManagerListener> mListeners =
-            new CopyOnWriteArraySet<ConnectionManagerListener>();
+            new CopyOnWriteArraySet<>();
 
-    private Map<Integer, Connection> mConnections =
+    private final Map<Integer, Connection> mConnections =
             Collections.synchronizedMap(new HashMap<Integer, Connection>());
 
     ArrayList<HostConnection> mHostConnList = new ArrayList<>();
@@ -153,9 +153,7 @@ public class ConnectionManager {
     }
 
     public Connection getConnection(int id) {
-        Connection conn = mConnections.get(id);
-
-        return conn;
+        return mConnections.get(id);
     }
 
     public int getConnectionsCount() {
@@ -195,9 +193,9 @@ public class ConnectionManager {
                 return 0;
             }
 
-            for (int i = 0; i < keys.length; i++) {
-                if (maxKey < keys[i]) {
-                    maxKey = keys[i];
+            for (Integer key : keys) {
+                if (maxKey < key) {
+                    maxKey = key;
                 }
             }
         }

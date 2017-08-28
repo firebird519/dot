@@ -193,13 +193,13 @@ public class HostSearchHandler {
         for (int i = start; i < end; i++) {
             ip[3] = (byte) i;
 
-            createConnectingTask(ip, port, DEBUG? true :false);
+            createConnectingTask(ip, port, DEBUG);
         }
 
         for (int i = 0; i < 256; i++) {
             ip[3] = (byte) i;
 
-            createConnectingTask(ip, port, DEBUG? true :false);
+            createConnectingTask(ip, port, DEBUG);
         }
     }
 
