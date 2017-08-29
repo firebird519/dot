@@ -5,7 +5,8 @@ import android.app.Fragment;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.SystemClock;
+import android.os.Handler;
+import android.os.Message;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,18 +14,20 @@ import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import com.assistant.R;
-import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
 import com.assistant.mediatransfer.MediaTransferManager;
-import com.assistant.mediatransfer.events.ChatMessageEvent;
-import com.assistant.mediatransfer.events.ClientInfo;
-import com.assistant.mediatransfer.events.Event;
+import com.assistant.events.ChatMessageEvent;
+import com.assistant.events.ClientInfo;
+import com.assistant.events.Event;
 import com.assistant.utils.Log;
+import com.assistant.utils.Utils;
 
+import java.text.SimpleDateFormat;
 import java.util.List;
 
 public class ChatFragment extends Fragment {
@@ -34,6 +37,9 @@ public class ChatFragment extends Fragment {
 
     private ListView mChattingListView;
     private ChattingAdapter mChattingAdapter;
+
+    private Button mSendBtn;
+    private EditText mMsgEditText;
 
     private LayoutInflater mLayoutInflater = null;
 
@@ -45,6 +51,29 @@ public class ChatFragment extends Fragment {
 
     private ClientInfo mConnClientInfo;
     List<ChatMessageEvent> mChatMessageList;
+
+    //2 mins, and 10s for test mode
+    private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG ? 10*1000 : 2*60*1000;
+
+    private static final int EVENT_LIST_UPDATE = 0;
+    private static final int EVENT_SCREEN_UPDATE = 1;
+
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case EVENT_LIST_UPDATE:
+                    mChattingAdapter.notifyDataSetChanged();
+                    break;
+                case EVENT_SCREEN_UPDATE:
+                    updateChatScreen();
+                    break;
+                default:
+                    break;
+            }
+            super.handleMessage(msg);
+        }
+    };
 
     @Override
     public void onAttach(Context context) {
@@ -80,20 +109,24 @@ public class ChatFragment extends Fragment {
 
         mChattingListView = (ListView)view.findViewById(R.id.chatting_list_view);
 
-        Button btn = (Button)view.findViewById(R.id.msg_send_btn);
-        final EditText editText = (EditText)view.findViewById(R.id.msg_input_view);
-        btn.setOnClickListener(new View.OnClickListener() {
+        mSendBtn = (Button)view.findViewById(R.id.msg_send_btn);
+        mMsgEditText = (EditText)view.findViewById(R.id.msg_input_view);
+        mSendBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String msg = editText.getText().toString();
-                editText.setText("");
+                String msg = mMsgEditText.getText().toString();
+                mMsgEditText.setText("");
 
                 ChatMessageEvent event =
                         new ChatMessageEvent(msg,
                                 System.currentTimeMillis(),
                                 mConnId,
-                                mConnClientInfo.uniqueId,
+                                mConnClientInfo.uId,
                                 false);
+
+                mMediaTransManager.sendMessage(mConnId, event);
+
+                mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
 
             }
         });
@@ -102,24 +135,41 @@ public class ChatFragment extends Fragment {
         mChattingListView.setAdapter(mChattingAdapter);
     }
 
+    private String getTimeString(long time) {
+        SimpleDateFormat dateformat = new SimpleDateFormat("MM-dd HH:mm:ss");
+        return dateformat.format(time);
+    }
     private void init() {
         if (mMediaTransManager == null) {
             mConnectionManager = ConnectionManager.getInstance(mContext.getApplicationContext());
             mConnClientInfo = mConnectionManager.getClientInfo(mConnId);
+
+            if (mConnClientInfo != null) {
+                getActivity().setTitle(mConnClientInfo.name);
+            }
+
             mMediaTransManager = MediaTransferManager.getInstance(mContext.getApplicationContext());
 
             mChatMessageList = mMediaTransManager.getMessageList(mConnId);
 
+            if (mChatMessageList != null) {
+                mChattingListView.setSelection(mChatMessageList.size() - 1);
+            }
 
-            mChattingListView.setSelection(mChatMessageList.size() - 1);
+            mHandler.sendEmptyMessage(EVENT_SCREEN_UPDATE);
 
             mMediaTransManager.addListener(new MediaTransferManager.MediaTransferListener() {
                 @Override
-                public void onClientAvailable(int id, ClientInfo info) {}
+                public void onClientAvailable(int id, ClientInfo info) {
+                    if (id == mConnId) {
+                        mConnClientInfo = info;
+                        mHandler.sendEmptyMessage(EVENT_SCREEN_UPDATE);
+                    }
+                }
 
                 @Override
                 public void onMessageReceived(int clientId, Event msg) {
-                    mChattingAdapter.notifyDataSetChanged();
+                    mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
                 }
 
                 @Override
@@ -128,6 +178,11 @@ public class ChatFragment extends Fragment {
                 }
             });
         }
+    }
+
+    private void updateChatScreen() {
+        mSendBtn.setEnabled(mConnClientInfo != null);
+        mMsgEditText.setEnabled(mConnClientInfo != null);
     }
 
     private class ChattingAdapter extends BaseAdapter {
@@ -157,10 +212,23 @@ public class ChatFragment extends Fragment {
                 viewHolder = (ViewHolder) convertView.getTag();
             }
 
+            ChatMessageEvent prevEvent = null;
+            if (position > 0) {
+                prevEvent = getItem(position - 1);
+            }
+
             ChatMessageEvent event = getItem(position);
             if (event != null) {
-                // TODO: show connection info in title bar
-                viewHolder.owner.setVisibility(View.GONE);
+                long prevMsgTime = prevEvent != null ? prevEvent.time : 0L;
+
+                Log.d(this, "prevMsgTime:" + prevMsgTime + ", cur event time:" + event.time);
+                if (event.time - prevMsgTime > TIME_DISPLAY_TIMESTAMP) {
+                    viewHolder.time.setVisibility(View.VISIBLE);
+                    viewHolder.time.setText(getTimeString(event.time));
+                } else {
+                    viewHolder.time.setVisibility(View.GONE);
+                }
+
 
                 String msg = event.message;
 
@@ -174,7 +242,16 @@ public class ChatFragment extends Fragment {
                     viewHolder.textMsgRight.setVisibility(View.VISIBLE);
 
                     viewHolder.textMsgLeft.setVisibility(View.GONE);
-                    viewHolder.owner.setVisibility(View.INVISIBLE);
+                }
+
+                if (event.mState == Event.STATE_TIMEOUT || event.mState == Event.STATE_FAILED) {
+                    viewHolder.statusTextView.setText(R.string.chat_send_failed);
+                    viewHolder.statusTextView.setVisibility(View.VISIBLE);
+
+                    convertView.setEnabled(false);
+                } else {
+                    viewHolder.statusTextView.setVisibility(View.GONE);
+                    convertView.setEnabled(true);
                 }
             } else {
 
@@ -196,12 +273,14 @@ public class ChatFragment extends Fragment {
         TextView time;
         TextView textMsgLeft;
         TextView textMsgRight;
+        TextView statusTextView;
 
         ViewHolder(View parent) {
             owner = (TextView) parent.findViewById(R.id.chat_owner_name);
             time = (TextView) parent.findViewById(R.id.chat_msg_time);
             textMsgLeft = (TextView) parent.findViewById(R.id.chat_message_left);
             textMsgRight = (TextView) parent.findViewById(R.id.chat_message_right);
+            statusTextView = (TextView) parent.findViewById(R.id.chat_msg_status_text_view);
         }
     }
 
@@ -213,6 +292,8 @@ public class ChatFragment extends Fragment {
 
         Activity activity = getActivity();
         Intent intent = activity.getIntent();
+
+        mContext = activity.getApplicationContext();
 
         mConnId = intent.getIntExtra(INTENT_EXTRA_CONNECTION_INDEX, -1);
 

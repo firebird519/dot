@@ -8,4 +8,7 @@
     <dimen name="chat_input_area_height">40dp</dimen>
     <dimen name="chat_send_btn_height">40dp</dimen>
     <dimen name="chat_send_btn_width">100dp</dimen>
+
+    <dimen name="chat_file_choose_btn_width">40dp</dimen>
+    <dimen name="chat_btn_panel_height">50dp</dimen>
 </resources>

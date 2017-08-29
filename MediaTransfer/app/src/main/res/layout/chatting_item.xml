@@ -1,31 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="wrap_content"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
     <TextView
         android:id="@+id/chat_owner_name"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:visibility="gone"/>
+
     <TextView
         android:id="@+id/chat_msg_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true"/>
+
+    <RelativeLayout android:id="@+id/chat_message_panel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentRight="true"/>
+        android:layout_below="@id/chat_msg_time">
+        <TextView
+            android:id="@+id/chat_message_left"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentLeft="true"
+            android:background="@drawable/chatfrom_bg_normal"
+            android:gravity="center" />
 
-    <TextView
-        android:id="@+id/chat_message_left"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentLeft="true"
-        android:layout_below="@id/chat_owner_name"
-        android:background="@drawable/chatfrom_bg_normal" />
+        <TextView
+            android:id="@+id/chat_message_right"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:background="@drawable/chatto_bg_normal"
+            android:gravity="center" />
+    </RelativeLayout>
 
-    <TextView
-        android:id="@+id/chat_message_right"
-        android:layout_width="wrap_content"
+
+    <TextView android:id="@+id/chat_msg_status_text_view"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentRight="true"
-        android:layout_below="@id/chat_owner_name"
-        android:background="@drawable/chatto_bg_normal" />
+        android:layout_below="@id/chat_message_panel"
+        android:layout_alignParentBottom="true"
+        android:gravity="center"
+        android:visibility="gone"/>
 </RelativeLayout>

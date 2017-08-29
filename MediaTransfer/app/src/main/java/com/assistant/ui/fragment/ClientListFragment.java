@@ -18,7 +18,7 @@ import android.widget.TextView;
 
 import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
-import com.assistant.mediatransfer.events.ClientInfo;
+import com.assistant.events.ClientInfo;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.ChattingActivity;
 import com.assistant.ui.view.CircleIndicatorView;

@@ -34,6 +34,8 @@ import javax.net.SocketFactory;
  */
 
 public class Connection {
+    private static final String TAG = "Connection";
+
     public interface ConnectionListener {
         void onConnected();
         void onConnectFailed(int reasonCode);
@@ -73,7 +75,7 @@ public class Connection {
 
     private int mId = -1;
 
-    // TODO: this uniqueId should be always same for same client.
+    // TODO: this uId should be always same for same client.
     // which should be sent to each other when connected.
     // CURRENT STEP1: we only try to make sure it's unique for all connections.
     private String mUniqueId;
@@ -157,6 +159,7 @@ public class Connection {
     }
 
     public void setConnData(Object info) {
+        Log.d(TAG, "setConnData, id:" + getId() + ", info:"  +info);
         mConnData = info;
     }
 
@@ -178,16 +181,20 @@ public class Connection {
      *
      * return: data size sent or failed code for sending.
      */
-    public int send(final byte[] data, final long size) {
+    // TODO: consider how to handle sending in progress when calling this...
+    public synchronized int send(final byte[] data, final long size) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             throw new NetworkOnMainThreadException();
         }
 
-        if (mState != CONNECTION_STATE_CONNECTED) {
-            return CONNECTION_REASON_CODE_NOT_CONNECTED;
-        }
+        Log.d(TAG, "send, mState:" + mState + ", mIsDataSending:" + mIsDataSending +
+                "mSocketOutputStream:" + mSocketOutputStream);
         if (mIsDataSending) {
             return CONNECTION_REASON_CODE_SOCKET_SENDING;
+        }
+
+        if (mState != CONNECTION_STATE_CONNECTED) {
+            return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
 
         if (mSocketOutputStream == null) {
@@ -221,8 +228,6 @@ public class Connection {
                         ", countNotSend:" + countNotSend);
             } while (countNotSend > 0);
 
-            mIsDataSending = false;
-
             synchronized (mSocketOutputStreamLock) {
                 if (mSocketOutputStream != null) {
                     mSocketOutputStream.flush();
@@ -236,6 +241,9 @@ public class Connection {
 
             closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
         }
+
+        mIsDataSending = false;
+        Log.d(TAG, "send, sentCount:" + sentCount);
 
         return sentCount;
     }
@@ -255,7 +263,7 @@ public class Connection {
         }
 
         if (buf == null || size <= 0) {
-            Log.d(this, "receive parameter is not right!");
+            Log.d(this, "receive parameter is not right! buf:" + buf + ", size:" + size);
             return 0;
         }
 

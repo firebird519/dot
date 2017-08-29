@@ -104,6 +104,7 @@ public class CircleIndicatorView extends View {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
+        // TODO: move out of here later?
         CalTextSize();
     }
 

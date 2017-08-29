@@ -19,7 +19,7 @@
         android:theme="@style/AppTheme"
         >
         <activity android:name="com.assistant.ui.MainActivity"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            android:theme="@style/NoTitleBarTheme">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -27,7 +27,8 @@
             </intent-filter>
         </activity>
 
-        <activity android:name="com.assistant.ui.ChattingActivity">
+        <activity android:name="com.assistant.ui.ChattingActivity"
+            android:theme="@style/CommonTheme">
 
         </activity>
     </application>

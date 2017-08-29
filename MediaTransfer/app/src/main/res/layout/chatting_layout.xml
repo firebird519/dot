@@ -3,31 +3,32 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <RelativeLayout
+    <LinearLayout
         android:id="@+id/chat_input_area"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
         android:orientation="horizontal"
-        android:padding="2dp"
-        android:visibility="visible">
+        android:layout_alignParentBottom="true"
+        android:padding="2dp">
+        <ImageButton android:id="@+id/msg_file_choose_btn"
+            android:layout_width="@dimen/chat_file_choose_btn_width"
+            android:layout_height="@dimen/chat_btn_panel_height"
+            android:src="@drawable/file_choose_btn_bk"/>
 
         <EditText
             android:id="@+id/msg_input_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="@dimen/chat_send_btn_width"
+            android:layout_marginRight="@dimen/chat_send_btn_width"
             android:hint="@string/chat_input_view_hint" />
 
         <Button
             android:id="@+id/msg_send_btn"
             android:layout_width="@dimen/chat_send_btn_width"
-            android:layout_height="@dimen/chat_send_btn_height"
-            android:layout_centerVertical="true"
-            android:layout_alignParentRight="true"
+            android:layout_height="@dimen/chat_btn_panel_height"
             android:background="@drawable/chat_send_btn_bk"
             android:text="@string/send"/>
-    </RelativeLayout>
+    </LinearLayout>
 
     <ListView
         android:id="@+id/chatting_list_view"
@@ -35,5 +36,6 @@
         android:layout_height="match_parent"
         android:layout_alignParentTop="true"
         android:layout_above="@id/chat_input_area"
+        android:divider="@null"
         android:padding="5dp" />
 </RelativeLayout>

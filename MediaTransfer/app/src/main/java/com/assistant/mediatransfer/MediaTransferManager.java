@@ -9,12 +9,13 @@ import android.text.TextUtils;
 
 import com.assistant.connection.ConnectionManager;
 import com.assistant.datastorage.SharePreferencesHelper;
-import com.assistant.mediatransfer.events.ChatMessageEvent;
-import com.assistant.mediatransfer.events.ClientInfo;
-import com.assistant.mediatransfer.events.Event;
+import com.assistant.events.ChatMessageEvent;
+import com.assistant.events.ClientInfo;
+import com.assistant.events.Event;
 import com.assistant.utils.Log;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -94,10 +95,12 @@ public class MediaTransferManager {
         thread.start();
         mThreadHandler = new MThreadHandler(thread.getLooper());
 
-        mThreadHandler.sendEmptyMessage(MThreadHandler.EVENT_GENERATE_CLIENTINFO);
+        //mThreadHandler.sendEmptyMessage(MThreadHandler.EVENT_GENERATE_CLIENTINFO);
+
+        generateClientInfo();
     }
 
-    public ArrayList<ChatMessageEvent> getMessageList(int connId) {
+    public List<ChatMessageEvent> getMessageList(int connId) {
         return mNetEventHandler.getMessageList(connId);
     }
 

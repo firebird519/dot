@@ -8,10 +8,12 @@ import android.os.SystemClock;
 
 import com.assistant.connection.ConnectionManager;
 import com.assistant.connection.DataSendListener;
-import com.assistant.mediatransfer.events.ClientInfo;
-import com.assistant.mediatransfer.events.Event;
-import com.assistant.mediatransfer.events.NetEvent;
-import com.assistant.mediatransfer.events.VerifyEvent;
+import com.assistant.events.ChatMessageEvent;
+import com.assistant.events.ClientInfo;
+import com.assistant.events.Event;
+import com.assistant.events.NetEvent;
+import com.assistant.events.VerifyEvent;
+import com.assistant.utils.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -97,14 +99,21 @@ public abstract class NetEventHandlerBase {
     abstract void handleConnectionAdded(int connId);
     abstract void handleConnectionRemoved(int connId);
     abstract boolean handleThreadHandlerMessage(Message msg);
+    abstract void recordChatEvent(int connId, ChatMessageEvent event);
 
     public void sendEvent(int connId, Event event) {
         String eventName = event.getEventTypeName();
+
+        if (NetEvent.EVENT_CHAT.equals(eventName)) {
+            recordChatEvent(connId, (ChatMessageEvent)event);
+        }
 
         cacheToBeVerifiedEvent(event);
 
         NetEvent netEvent = new NetEvent(eventName, event.toJsonString());
         byte[] bytes = netEvent.toBytes();
+
+        Log.d(this, "sendEvent, eventName:" + eventName);
         mConnectionManager.sendEvent(connId, event.uniqueId,  bytes, bytes.length,
                 new DataSendListener() {
             @Override
@@ -119,11 +128,10 @@ public abstract class NetEventHandlerBase {
                 if (event != null) {
                     updateEventState(event.connId, event, Event.STATE_SENT);
                 } else {
-
+                    Log.d(this, "sendEvent, event not found for id:" + eventId);
                 }
             }
         });
-        //updateEventState(connId, event, Event.STATE_SENDING);
     }
 
     private void updateEventState(int connId, Event event, int state) {
@@ -168,19 +176,20 @@ public abstract class NetEventHandlerBase {
     }
 
     protected void handleEventVerify(VerifyEvent verifyEvent) {
-        String name;
         synchronized (mToBeVerifiedEvents) {
-            for (Event event : mToBeVerifiedEvents) {
-                name = event.getEventTypeName();
+            if (verifyEvent == null) {
+                return;
+            }
+            Event event = getEventFromToBeVerifiedCache(verifyEvent.eventUnId);
+            if (event != null &&
+                    verifyEvent.eventName.equals(event.getEventTypeName()) &&
+                    verifyEvent.eventUnId == event.uniqueId) {
+                updateEventState(event.connId, event, Event.STATE_VERIFIED );
 
-                if (name.equals(verifyEvent.eventName)
-                        && event.uniqueId == verifyEvent.eventUnId) {
-                    mToBeVerifiedEvents.remove(event);
+                mToBeVerifiedEvents.remove(event);
 
-                    if (mToBeVerifiedEvents.size() == 0) {
-                        mThreadHandler.removeMessages(ThreadHandler.EVENT_TIMEOUT_CHECK);
-                    }
-                    break;
+                if (mToBeVerifiedEvents.size() == 0) {
+                    mThreadHandler.removeMessages(ThreadHandler.EVENT_TIMEOUT_CHECK);
                 }
             }
         }

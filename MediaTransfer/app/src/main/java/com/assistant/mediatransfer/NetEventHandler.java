@@ -5,11 +5,11 @@ import android.text.TextUtils;
 
 import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
-import com.assistant.mediatransfer.events.ChatMessageEvent;
-import com.assistant.mediatransfer.events.ClientInfo;
-import com.assistant.mediatransfer.events.Event;
-import com.assistant.mediatransfer.events.NetEvent;
-import com.assistant.mediatransfer.events.VerifyEvent;
+import com.assistant.events.ChatMessageEvent;
+import com.assistant.events.ClientInfo;
+import com.assistant.events.Event;
+import com.assistant.events.NetEvent;
+import com.assistant.events.VerifyEvent;
 import com.assistant.utils.Log;
 
 import java.util.ArrayList;
@@ -28,28 +28,29 @@ import java.util.Map;
 public class NetEventHandler extends NetEventHandlerBase {
 
 
-    // key string is unique id of one connection.
-    private Map<String, Object> mMsgCollections =
-            Collections.synchronizedMap(new HashMap<String, Object>(10));
+    // TODO: key string use unique id of one connection.
+    private Map<Integer, Object> mMsgCollections =
+            Collections.synchronizedMap(new HashMap<Integer, Object>(10));
 
     NetEventHandler(MediaTransferManager mediaTransferManager,
                     ConnectionManager connectionManager ) {
         super(mediaTransferManager, connectionManager);
     }
 
-    public ArrayList<ChatMessageEvent> getMessageList(int connId) {
+    public List<ChatMessageEvent> getMessageList(int connId) {
         Connection connection = mConnectionManager.getConnection(connId);
 
         if (connection != null) {
             ClientInfo clientInfo = (ClientInfo) connection.getConnData();
 
-            if (clientInfo != null && TextUtils.isEmpty(clientInfo.uniqueId)) {
-                return (ArrayList<ChatMessageEvent>)mMsgCollections.get(clientInfo.uniqueId);
+            Log.d(this, "getMessageList, get msg list for connId:" + connId);
+            if (clientInfo != null) {
+                return (List<ChatMessageEvent>)mMsgCollections.get(connId);
             } else {
-                Log.d(this, "clientInfo not received for id:" + connId);
+                Log.d(this, "getMessageList, clientInfo not received for id:" + connId);
             }
         } else {
-            Log.d(this, "connection not avaible for id:" + connId);
+            Log.d(this, "getMessageList, connection not avaible for id:" + connId);
         }
 
         return null;
@@ -57,6 +58,12 @@ public class NetEventHandler extends NetEventHandlerBase {
 
     @Override
     void handleConnectionAdded(int connId) {
+        Connection connection = mConnectionManager.getConnection(connId);
+
+        Log.d(this, "handleConnectionAdded, connId:" + connId);
+        if (connection != null && !connection.isHost()) {
+            sendClientInfoEvent(connId);
+        }
     }
 
     @Override
@@ -74,9 +81,11 @@ public class NetEventHandler extends NetEventHandlerBase {
         NetEvent netEvent = Event.toEvent(data, NetEvent.class);
 
         if (netEvent == null) {
-            Log.d(this, "NetEvent parse error:" + data);
+            Log.d(this, "handleNetEvent, NetEvent parse error:" + data);
             return;
         }
+
+        Log.d(this, "handleNetEvent, connId:" + connId + ", netEvent:" + netEvent.jsonData);
 
         if (!NetEvent.EVENT_VERIFY.equals(netEvent.name)) {
             verifyEvent(connId, netEvent.name, netEvent.unId);
@@ -91,17 +100,21 @@ public class NetEventHandler extends NetEventHandlerBase {
 
                 Connection connection = mConnectionManager.getConnection(connId);
                 if (connection != null) {
+
+                    Log.d(this, "handleNetEvent, received ClientInfoEvent, connId:" + connection.getId());
                     connection.setConnData(clientInfo);
                     List<ChatMessageEvent> mMsgArray =
                             Collections.synchronizedList(new ArrayList<ChatMessageEvent>());
 
-                    mMsgCollections.put(clientInfo.uniqueId, mMsgArray);
+                    Log.d(this, "handleNetEvent, create msg list for uid:" + clientInfo.uId);
+                    mMsgCollections.put(connId, mMsgArray);
 
                     notifyClientAvailable(connId, clientInfo);
 
                     // when connection connected, client send info to host side first.
                     // host side will send info back after received client info.
                     if (connection.isHost()) {
+                        Log.d(this, "handleNetEvent, response ClientInfoEvent");
                         sendClientInfoEvent(connId);
                     }
                 }
@@ -110,9 +123,10 @@ public class NetEventHandler extends NetEventHandlerBase {
                 ChatMessageEvent event = Event.toEvent(netEvent.jsonData, ChatMessageEvent.class);
 
                 if (event != null) {
-                    ArrayList<ChatMessageEvent> msgList = getMessageList(connId);
+                    event.setIsReceived(true);
+                    event.setEventCreateTime(System.currentTimeMillis());
 
-                    msgList.add(event);
+                    recordChatEvent(connId, event);
 
                     // notify to UI.
                     notifyEventReceived(connId, event);
@@ -127,5 +141,16 @@ public class NetEventHandler extends NetEventHandlerBase {
 
     private void sendClientInfoEvent(int connId) {
         sendEvent(connId, mMediaTransferManager.getClientInfo());
+    }
+
+    void recordChatEvent(int connId, ChatMessageEvent event){
+        Log.d(this, "recordChatEvent, record event for connId:" + connId);
+        List<ChatMessageEvent> msgList = getMessageList(connId);
+
+        if (msgList != null) {
+            msgList.add(event);
+        } else {
+            Log.d(this, "recordChatEvent, ChatMessageEvent message list not found!");
+        }
     }
 }

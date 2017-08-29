@@ -1,7 +1,4 @@
-package com.assistant.mediatransfer.events;
-
-import com.google.gson.Gson;
-import com.google.gson.annotations.Expose;
+package com.assistant.events;
 
 /**
  * Created by alex on 17-8-21.
@@ -25,6 +22,7 @@ public class NetEvent extends Event{
     public long unId;
 
     public NetEvent(String eventName, String data) {
+        super(0, 0L);
         name = eventName;
         jsonData = data;
         unId = System.currentTimeMillis();

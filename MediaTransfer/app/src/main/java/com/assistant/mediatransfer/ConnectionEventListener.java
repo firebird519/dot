@@ -1,7 +1,7 @@
 package com.assistant.mediatransfer;
 
-import com.assistant.mediatransfer.events.ClientInfo;
-import com.assistant.mediatransfer.events.Event;
+import com.assistant.events.ClientInfo;
+import com.assistant.events.Event;
 
 /**
  * Created by alex on 17-8-28.

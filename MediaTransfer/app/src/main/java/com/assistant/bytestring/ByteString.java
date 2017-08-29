@@ -58,10 +58,20 @@ public class ByteString {
 
     public void release() {
         mRefCount --;
+
+        if (mRefCount < 0) {
+            mRefCount = 0;
+        } else if (mRefCount == 0) {
+            mLen = 0;
+        }
     }
 
     public Object getLockObject() {
         return mObjLock;
+    }
+
+    public void setDataLen(int len) {
+        mLen = len;
     }
 
     /**

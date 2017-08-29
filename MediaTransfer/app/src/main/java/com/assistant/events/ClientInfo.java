@@ -1,4 +1,4 @@
-package com.assistant.mediatransfer.events;
+package com.assistant.events;
 
 /**
  * Created by alex on 17-8-21.
@@ -6,11 +6,12 @@ package com.assistant.mediatransfer.events;
 
 public class ClientInfo extends Event {
     public String name;
-    public String uniqueId;
+    public String uId;
 
     public ClientInfo(String clientName, String unId) {
+        super(0, 0L);
         name = clientName;
-        uniqueId = unId;
+        uId = unId;
     }
 
     @Override

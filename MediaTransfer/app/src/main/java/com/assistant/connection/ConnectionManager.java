@@ -9,7 +9,7 @@ import android.text.TextUtils;
 
 import com.assistant.bytestring.ByteString;
 import com.assistant.bytestring.ByteStringPool;
-import com.assistant.mediatransfer.events.ClientInfo;
+import com.assistant.events.ClientInfo;
 import com.assistant.utils.Log;
 import com.assistant.utils.ThreadPool;
 import com.assistant.utils.Utils;
@@ -19,7 +19,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,7 +38,9 @@ import java.util.concurrent.CopyOnWriteArraySet;
  */
 
 public class ConnectionManager {
-    public static int DATA_HEADER_LEN_v1 = 22;
+    private static final String TAG = "ConnectionManager";
+
+    public static int DATA_HEADER_LEN_v1 = 34;
     public static int DATA_HEADER_V1 = 1;
 
     public static final int DEFAULT_PORT = 8671;
@@ -75,6 +76,7 @@ public class ConnectionManager {
 
     private final Map<Integer, Connection> mConnections =
             Collections.synchronizedMap(new HashMap<Integer, Connection>());
+    private static int sConnIdBase = -1;
 
     ArrayList<HostConnection> mHostConnList = new ArrayList<>();
 
@@ -145,7 +147,7 @@ public class ConnectionManager {
                 connection.addListner(new ConnectionListenerImpl(connection));
                 connection.startHeartBeat();
 
-                mThreadHandler.obtainMessage(EVENT_CONNECTION_ADDED, connection.getId()).
+                mThreadHandler.obtainMessage(EVENT_CONNECTION_ADDED, connection.getId(), 0).
                         sendToTarget();
 
                 new ConnectionReceiverThread(connection).start();
@@ -196,7 +198,7 @@ public class ConnectionManager {
     }
 
     private Integer generateConnectionId() {
-        int maxKey = -1;
+        /*int maxKey = -1;
 
         synchronized (mConnections) {
             Integer[] keys = getConnectionIds();
@@ -209,9 +211,15 @@ public class ConnectionManager {
                     maxKey = key;
                 }
             }
+        }*/
+
+        synchronized (mConnections) {
+            sConnIdBase += 1;
         }
 
-        return maxKey + 1;
+        Log.d(TAG, "generateConnectionId:" + sConnIdBase);
+
+        return sConnIdBase;
     }
 
     private void removeConnection(Connection connection, int reason) {
@@ -235,6 +243,7 @@ public class ConnectionManager {
     }
 
     private void notifyConnectionAdded(int connId) {
+        Log.d(TAG, "notifyConnectionAdded:" + connId);
         for(ConnectionManagerListener listener : mListeners) {
             listener.onConnectionAdded(connId);
         }
@@ -272,15 +281,21 @@ public class ConnectionManager {
             filePathName = strFilePathName;
             listener = sendListener;
         }
+
         @Override
         public void run() {
             Connection conn = getConnection(connId);
             int ret = 0;
             boolean success = false;
 
+            Log.d(TAG, "EventSendRunnable, conn:" + conn + ", bytesLen:" + bytesLen);
+
             if (conn != null) {
+                Log.d(TAG, "EventSendRunnable, filePathName:" + filePathName);
                 if (TextUtils.isEmpty(filePathName)) {
                     byte[] header = generateDataHeader(bytesLen, 0);
+
+                    Log.d(TAG, "EventSendRunnable, header:" + header.length);
 
                     ret = conn.send(header, DATA_HEADER_LEN_v1);
                     if (ret == DATA_HEADER_LEN_v1) {
@@ -290,71 +305,77 @@ public class ConnectionManager {
                             success = true;
                         }
                     }
-                }
 
-                if (listener != null) {
+                    Log.d(TAG, "EventSendRunnable, send ret:" + ret);
+
+                    if (listener != null) {
+                        if (success) {
+                            listener.onSendProgress(eventId, 100);
+                            listener.onResult(eventId, DataSendListener.RESULT_SUCESS, ret);
+                        } else {
+                            listener.onResult(eventId, DataSendListener.RESULT_FAILED, ret);
+                        }
+                    }
+                } else {
+                    Log.d(TAG, "EventSendRunnable, send file:" + filePathName);
+                    FileInputStream fileInputStream;
+                    try {
+                        fileInputStream = new FileInputStream(filePathName);
+                        int fileLen = fileInputStream.available();
+
+                        byte[] header = generateDataHeader(bytesLen, fileLen);
+
+                        ret = conn.send(header, DATA_HEADER_LEN_v1);
+                        if (ret == DATA_HEADER_LEN_v1) {
+                            ret = conn.send(bytes, bytesLen);
+
+                            if (ret == bytesLen && fileLen > 0) {
+                                int bufferSize =
+                                        fileLen > Connection.SOCKET_DEFAULT_BUF_SIZE ?
+                                                Connection.SOCKET_DEFAULT_BUF_SIZE : fileLen;
+
+                                byte[] buffer = new byte[bufferSize];
+
+                                int sentBytes = 0;
+                                int bytesFileRead;
+                                do {
+                                    bytesFileRead = fileInputStream.read(buffer);
+                                    ret = conn.send(buffer, bytesFileRead);
+
+                                    if (ret == bytesFileRead) {
+
+                                        sentBytes += ret;
+                                        listener.onSendProgress(eventId, (sentBytes * 100) / fileLen);
+                                    } else {
+                                        success = false;
+                                        break;
+                                    }
+                                } while (sentBytes < fileLen);
+
+                                if (sentBytes == fileLen) {
+                                    success = true;
+                                }
+                            } else if (ret == bytesLen) {
+                                listener.onSendProgress(eventId, 100);
+                                success = true;
+                            }
+                        }
+
+                        fileInputStream.close();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
                     if (success) {
-                        listener.onSendProgress(eventId, 100);
-                        listener.onResult(eventId, DataSendListener.RESULT_SUCESS, ret);
+                        listener.onResult(eventId, DataSendListener.RESULT_SUCESS, 0);
                     } else {
                         listener.onResult(eventId, DataSendListener.RESULT_FAILED, ret);
                     }
                 }
-            } else {
-                FileInputStream fileInputStream;
-                try {
-                    fileInputStream = new FileInputStream(filePathName);
-                    int fileLen = fileInputStream.available();
 
-                    byte[] header = generateDataHeader(bytesLen, fileLen);
-
-                    ret = conn.send(header, DATA_HEADER_LEN_v1);
-                    if (ret == DATA_HEADER_LEN_v1) {
-                        ret = conn.send(bytes, bytesLen);
-
-                        if (ret == bytesLen && fileLen > 0) {
-                            int bufferSize =
-                                    fileLen > Connection.SOCKET_DEFAULT_BUF_SIZE ?
-                                            Connection.SOCKET_DEFAULT_BUF_SIZE : fileLen;
-
-                            byte [] buffer = new byte[bufferSize];
-
-                            int sentBytes = 0;
-                            int bytesFileRead;
-                            do {
-                                bytesFileRead = fileInputStream.read(buffer);
-                                ret = conn.send(buffer, bytesFileRead);
-
-                                if (ret == bytesFileRead) {
-
-                                    sentBytes += ret;
-                                    listener.onSendProgress(eventId, (sentBytes * 100)/fileLen);
-                                } else {
-                                    success = false;
-                                    break;
-                                }
-                            } while(sentBytes < fileLen);
-
-                            if (sentBytes == fileLen) {
-                                success = true;
-                            }
-                        } else if (ret == bytesLen) {
-                            listener.onSendProgress(eventId, 100);
-                            success = true;
-                        }
-                    }
-
-                    fileInputStream.close();
-                } catch(Exception e){
-                    e.printStackTrace();
-                }
-
-                if (success) {
-                    listener.onResult(eventId, DataSendListener.RESULT_SUCESS, 0);
-                } else {
-                    listener.onResult(eventId, DataSendListener.RESULT_FAILED, ret);
-                }
             }
+
+            Log.d(TAG, "EventSendRunnable, ended for connId:" + connId);
         }
     }
 
@@ -371,6 +392,14 @@ public class ConnectionManager {
                           final byte[] jsonBytes,
                           final long jsonLen,
                           final DataSendListener listener) {
+
+        /*new Thread(new EventSendRunnable(connId,
+                eventId,
+                jsonBytes,
+                jsonLen,
+                "",
+                listener)).start();*/
+
         mThreadPool.addTask(new EventSendRunnable(connId,
                 eventId,
                 jsonBytes,
@@ -411,16 +440,20 @@ public class ConnectionManager {
     private byte[] generateDataHeader(long jsonLen, long fileLen) {
         ByteBuffer buf = ByteBuffer.allocate(DATA_HEADER_LEN_v1);
 
-        try {
-            buf.put("[v:1;j:".getBytes("UTF-8"));
-            buf.putLong(jsonLen);
-            buf.put(";f:".getBytes("UTF-8"));
-            buf.putLong(fileLen);
-            buf.put("]".getBytes("UTF-8"));
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-            return null;
-        }
+        buf.put("[v:".getBytes());
+
+        Log.d(TAG, "p1:" + buf.position());
+        buf.putLong(1);
+        Log.d(TAG, "p2:" + buf.position());
+        buf.put(";j:".getBytes());
+        Log.d(TAG, "p3:" + buf.position());
+        buf.putLong(jsonLen);
+        Log.d(TAG, "p4:" + buf.position());
+        buf.put(";f:".getBytes());
+        Log.d(TAG, "p5:" + buf.position());
+        buf.putLong(fileLen);
+        Log.d(TAG, "p6:" + buf.position());
+        buf.put("]".getBytes());
 
         return buf.array();
     }
@@ -452,6 +485,8 @@ public class ConnectionManager {
                     break;
                 }
 
+                Log.d(TAG, "ConnectionReceiverThread, mReceivingState:" + mReceivingState);
+
                 if (mReceivingState == RECEIVING_HEADER) {
                     int bytesReceived = 0;
                     if (mConnection != null &&
@@ -465,8 +500,9 @@ public class ConnectionManager {
                         closeConnection();
                     }
                   } else if (mReceivingState == RECEIVING_JSON) {
+                    Log.d(TAG, "ConnectionReceiverThread, mJsonLen:" + mJsonLen);
                     if (mJsonLen <= ByteString.DEFAULT_STRING_SIZE) {
-                        ByteString buf = handleFileReceiving((int)mJsonLen);
+                        ByteString buf = handleDataReceiving((int)mJsonLen);
                         if (buf != null) {
                             if (mFileLen > 0) {
                                 setState(RECEIVING_FILE);
@@ -478,6 +514,8 @@ public class ConnectionManager {
                                     EVENT_CONNECTION_DATA_RECEIVED, mConnection.getId(), 0);
 
                             msg.obj = buf.toString();
+                            Log.d(TAG, "ConnectionReceiverThread, received json:" + buf.toString());
+
                             buf.release();
                             msg.sendToTarget();
                         } else {
@@ -489,7 +527,7 @@ public class ConnectionManager {
                     }
 
                 } else if (mReceivingState == RECEIVING_FILE) {
-                    ByteString buf = handleFileReceiving((int)mFileLen);
+                    ByteString buf = handleDataReceiving((int)mFileLen);
 
                     if (buf != null) {
                         setState(RECEIVING_HEADER);
@@ -512,6 +550,7 @@ public class ConnectionManager {
         }
 
         private void setState(int state) {
+            Log.d(TAG, "ConnectionReceiverThread, setState:" + state);
             mReceivingState  = state;
 
             if (state == RECEIVING_HEADER) {
@@ -543,6 +582,10 @@ public class ConnectionManager {
             mFileLen = mHeaderBuf.getLong();
             byte end = mHeaderBuf.get();
 
+            Log.d(TAG, "handleConnectionHeader, mHeaderVersion:" + mHeaderVersion
+                    + ", mJsonLen:" + mJsonLen
+                    + ", mFileLen:" + mFileLen);
+
             if (mHeaderVersion == DATA_HEADER_V1 &&
                     start == '[' &&
                     end == ']' &&
@@ -564,7 +607,7 @@ public class ConnectionManager {
             mHeaderBuf.clear();
         }
 
-        private ByteString handleFileReceiving(int len) {
+        private ByteString handleDataReceiving(int len) {
             if (mConnection == null ||
                     mConnection.getState() != Connection.CONNECTION_STATE_CONNECTED) {
                 return null;
@@ -575,13 +618,15 @@ public class ConnectionManager {
                 int bytesReceived = 0;
                 if (mConnection != null &&
                         mConnection.getState() == Connection.CONNECTION_STATE_CONNECTED) {
-                    bytesReceived = mConnection.receive(buf.data, mFileLen);
+                    bytesReceived = mConnection.receive(buf.data, len);
                 }
 
                 if (bytesReceived != len) {
                     // some problem happened.
                     buf.release();
                     buf = null;
+                } else {
+                    buf.setDataLen(len);
                 }
 
                 return buf;
@@ -622,10 +667,10 @@ public class ConnectionManager {
 
                 ByteString buf = ByteStringPool.getInstance().getByteString();
                 do {
-                    if (mFileLen - receivedCount >= ByteString.DEFAULT_STRING_SIZE) {
+                    if (len - receivedCount >= ByteString.DEFAULT_STRING_SIZE) {
                         bytesToReceive = ByteString.DEFAULT_STRING_SIZE;
                     } else {
-                        bytesToReceive = mFileLen - receivedCount;
+                        bytesToReceive = len - receivedCount;
                     }
 
                     if (mConnection != null &&
@@ -648,7 +693,7 @@ public class ConnectionManager {
                         errorHappened = true;
                         break;
                     }
-                } while (mFileLen > receivedCount);
+                } while (len > receivedCount);
 
                 try {
                     fileOpStream.close();
@@ -724,12 +769,26 @@ public class ConnectionManager {
             };
 
     public void listen(int port) {
+        if (isHostPortUsed(port)) {
+            return;
+        }
+
         final HostConnection hostConnection =
                 ConnectionFactory.createHostConnection(port, mHostListener);
 
         if (hostConnection != null) {
             mHostConnList.add(hostConnection);
         }
+    }
+
+    private boolean isHostPortUsed(int port) {
+        for(HostConnection connection:mHostConnList) {
+            if (connection.getPort() == port) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public interface SearchListener{

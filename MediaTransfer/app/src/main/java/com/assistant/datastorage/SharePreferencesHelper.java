@@ -11,7 +11,7 @@ public class SharePreferencesHelper {
     private SharedPreferences mSharedPreferences;
     private static final String SP_NAME = "media_transfer";
 
-    public static final String SP_KEY_UNIQUE_ID = "uniqueId";
+    public static final String SP_KEY_UNIQUE_ID = "uId";
     public static final String SP_KEY_PORT = "port";
     public static final String SP_KEY_CLIENT_NAME = "clientName";
 

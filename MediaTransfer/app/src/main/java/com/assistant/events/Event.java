@@ -1,4 +1,4 @@
-package com.assistant.mediatransfer.events;
+package com.assistant.events;
 
 import android.os.SystemClock;
 
@@ -18,12 +18,23 @@ public abstract class Event {
     public static final int STATE_SENT = 1;
     public static final int STATE_VERIFIED = 2;
     public static final int STATE_TIMEOUT = 3;
+    public static final int STATE_FAILED = 4;
 
     @Expose(serialize = false)
     public int mState;
 
     public int connId; // necessary?
     public long uniqueId = SystemClock.elapsedRealtime();
+    public long time;
+
+    public Event(int connectionId, long lTime) {
+        time = lTime;
+        connId = connectionId;
+    }
+
+    public void setEventCreateTime(long curTime) {
+        time = curTime;
+    }
 
     public String toJsonString() {
         return sGson.toJson(this, this.getClass());
