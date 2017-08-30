@@ -35,5 +35,11 @@
             android:theme="@style/SettingsTheme">
 
         </activity>
+
+        <activity android:name="com.assistant.ui.FileChooserActivity"
+            android:theme="@style/CommonTheme">
+
+        </activity>
+
     </application>
 </manifest>

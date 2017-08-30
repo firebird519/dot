@@ -5,17 +5,17 @@ package com.assistant.events;
  */
 
 public class VerifyEvent extends Event {
-    public  String eventName;
+    public  int eventType;
     public  long eventUnId; // use SystemClock.elapsedRealtime();
 
-    public VerifyEvent(String name, long eventId) {
+    public VerifyEvent(int type, long eventId) {
         super(0, 0L);
-        eventName = name;
+        eventType = type;
         eventUnId = eventId;
     }
 
     @Override
-    public String getEventTypeName() {
-        return NetEvent.EVENT_VERIFY;
+    public int getEventType() {
+        return EVENT_TYPE_VERIFY;
     }
 }

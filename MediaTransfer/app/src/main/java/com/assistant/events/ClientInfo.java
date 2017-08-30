@@ -15,7 +15,7 @@ public class ClientInfo extends Event {
     }
 
     @Override
-    public String getEventTypeName() {
-        return NetEvent.EVENT_CLIENT_INFO;
+    public int getEventType() {
+        return Event.EVENT_TYPE_CLIENTNAME;
     }
 }

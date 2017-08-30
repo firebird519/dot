@@ -10,22 +10,15 @@ public class ChatMessageEvent extends Event {
 
     public String connUniqueId;//
 
-    public boolean isReceived; // if it's true, means it send myself.
 
     public ChatMessageEvent(String msg, long curTime, int connectionId, String userId, boolean received) {
-        super(connectionId, curTime);
+        super(connectionId, curTime, received);
         message = msg;
         connUniqueId = userId;
-        isReceived = received;
     }
-
-    public void setIsReceived(boolean received) {
-        isReceived = received;
-    }
-
 
     @Override
-    public String getEventTypeName() {
-        return NetEvent.EVENT_CHAT;
+    public int getEventType() {
+        return EVENT_TYPE_CHAT;
     }
 }

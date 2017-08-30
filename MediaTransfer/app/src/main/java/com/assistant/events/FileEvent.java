@@ -6,8 +6,8 @@ package com.assistant.events;
 
 public class FileEvent extends Event {
     @Override
-    public String getEventTypeName() {
-        return NetEvent.EVENT_FILE;
+    public int getEventType() {
+        return EVENT_TYPE_FILE;
     }
 
     public FileEvent(int connectionId, long curTime) {

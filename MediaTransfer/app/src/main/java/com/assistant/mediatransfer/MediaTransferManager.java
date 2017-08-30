@@ -101,15 +101,19 @@ public class MediaTransferManager {
         generateClientInfo();
     }
 
-    public List<ChatMessageEvent> getMessageList(int connId) {
+    public List<Event> getMessageList(int connId) {
         return mNetEventHandler.getMessageList(connId);
     }
 
-    public int sendMessage(int connId, ChatMessageEvent event) {
+    public int sendEvent(int connId, Event event) {
         if (event != null) {
             mNetEventHandler.sendEvent(connId, event);
         }
 
+        return 0;
+    }
+
+    public int sendFile(int connId, String strFilePathName) {
         return 0;
     }
 
@@ -130,8 +134,8 @@ public class MediaTransferManager {
         }
     }
 
-    public void reset() {
-        // TODO:
+    public void stopAll() {
+        mConnectionManager.stopAll();
     }
 
     public ClientInfo getClientInfo() {

@@ -8,10 +8,9 @@ import android.os.SystemClock;
 
 import com.assistant.connection.ConnectionManager;
 import com.assistant.connection.DataSendListener;
-import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
-import com.assistant.events.NetEvent;
+import com.assistant.events.EventHead;
 import com.assistant.events.VerifyEvent;
 import com.assistant.utils.Log;
 
@@ -99,21 +98,20 @@ public abstract class NetEventHandlerBase {
     abstract void handleConnectionAdded(int connId);
     abstract void handleConnectionRemoved(int connId);
     abstract boolean handleThreadHandlerMessage(Message msg);
-    abstract void recordChatEvent(int connId, ChatMessageEvent event);
+    abstract void recordEvent(int connId, Event event);
 
     public void sendEvent(int connId, Event event) {
-        String eventName = event.getEventTypeName();
-
-        if (NetEvent.EVENT_CHAT.equals(eventName)) {
-            recordChatEvent(connId, (ChatMessageEvent)event);
+        if (event.getEventType() == Event.EVENT_TYPE_CHAT
+                || event.getEventType() == Event.EVENT_TYPE_FILE) {
+            recordEvent(connId, event);
         }
 
         cacheToBeVerifiedEvent(event);
 
-        NetEvent netEvent = new NetEvent(eventName, event.toJsonString());
+        EventHead netEvent = new EventHead(event.getEventType(), event.toJsonString());
         byte[] bytes = netEvent.toBytes();
 
-        Log.d(this, "sendEvent, eventName:" + eventName);
+        Log.d(this, "sendEvent, eventType:" + event.getEventType());
         mConnectionManager.sendEvent(connId, event.uniqueId,  bytes, bytes.length,
                 new DataSendListener() {
             @Override
@@ -182,7 +180,7 @@ public abstract class NetEventHandlerBase {
             }
             Event event = getEventFromToBeVerifiedCache(verifyEvent.eventUnId);
             if (event != null &&
-                    verifyEvent.eventName.equals(event.getEventTypeName()) &&
+                    verifyEvent.eventType == event.getEventType() &&
                     verifyEvent.eventUnId == event.uniqueId) {
                 updateEventState(event.connId, event, Event.STATE_VERIFIED );
 
@@ -195,7 +193,7 @@ public abstract class NetEventHandlerBase {
         }
     }
 
-    protected void verifyEvent(int connId, String event, long msgIndex) {
+    protected void verifyEvent(int connId, int event, long msgIndex) {
         sendEvent(connId, new VerifyEvent(event, msgIndex));
     }
 

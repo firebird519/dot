@@ -27,8 +27,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
+import static com.assistant.connection.HostSearchHandler.SERVER_SEARCH_CANCELED;
+
 /**
- * Created by alex on 17-8-19.
  *
  * Attention:
  * 1. current don't support big json content which bigger than 64k.
@@ -83,6 +84,8 @@ public class ConnectionManager {
     private ThreadPool mThreadPool = new ThreadPool(5);
 
     private ConnMgrThreadHandler mThreadHandler;
+
+    private boolean mStopped = false;
 
     private static final int EVENT_CONNECTION_ADDED = 0;
     private static final int EVENT_CONNECTION_REMOVED = 1;
@@ -227,6 +230,24 @@ public class ConnectionManager {
             mConnections.remove(connection);
 
             mThreadHandler.obtainMessage(EVENT_CONNECTION_REMOVED, connection.getId(), reason);
+        }
+    }
+
+    public void stopAll() {
+        mStopped = true;
+
+        HostSearchHandler.getInstance(mContext).stopSearch(SERVER_SEARCH_CANCELED);
+
+        synchronized (mHostConnList) {
+            for(HostConnection hostConn: mHostConnList) {
+                hostConn.close();
+            }
+        }
+
+        synchronized (mConnections) {
+            for(Connection conn : mConnections.values()) {
+                conn.close();
+            }
         }
     }
 
@@ -761,7 +782,9 @@ public class ConnectionManager {
                 @Override
                 public void onHostClosed(HostConnection host, int errorCode) {
                     if (host != null) {
-                        mHostConnList.remove(host);
+                        synchronized (mHostConnList) {
+                            mHostConnList.remove(host);
+                        }
                     }
 
                     // TODO: notify to UI
@@ -777,14 +800,18 @@ public class ConnectionManager {
                 ConnectionFactory.createHostConnection(port, mHostListener);
 
         if (hostConnection != null) {
-            mHostConnList.add(hostConnection);
+            synchronized (mHostConnList) {
+                mHostConnList.add(hostConnection);
+            }
         }
     }
 
     private boolean isHostPortUsed(int port) {
-        for(HostConnection connection:mHostConnList) {
-            if (connection.getPort() == port) {
-                return true;
+        synchronized (mHostConnList) {
+            for (HostConnection connection : mHostConnList) {
+                if (connection.getPort() == port) {
+                    return true;
+                }
             }
         }
 

@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.Nullable;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,26 +21,34 @@ import android.widget.TextView;
 
 import com.assistant.R;
 import com.assistant.connection.ConnectionManager;
-import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
+import com.assistant.events.EventHead;
+import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.ui.FileChooserActivity;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
 import java.text.SimpleDateFormat;
 import java.util.List;
 
+import static android.app.Activity.RESULT_OK;
+import static com.assistant.ui.FileChooserActivity.EXTRA_FILE_CHOOSER;
+
 public class ChatFragment extends Fragment {
     private static final String TAG = "ChatFragment";
 
     private final static String INTENT_EXTRA_CONNECTION_INDEX = "extra_connection_index";
+
+    private final static int FILE_CHOOSER_REQUEST_CODE = 1;
 
     private ListView mChattingListView;
     private ChattingAdapter mChattingAdapter;
 
     private Button mSendBtn;
     private EditText mMsgEditText;
+    private ImageButton mFileChooseBtn;
 
     private LayoutInflater mLayoutInflater = null;
 
@@ -50,7 +59,7 @@ public class ChatFragment extends Fragment {
     private ConnectionManager mConnectionManager;
 
     private ClientInfo mConnClientInfo;
-    List<ChatMessageEvent> mChatMessageList;
+    List<Event> mChatMessageList;
 
     //2 mins, and 10s for test mode
     private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG ? 10*1000 : 2*60*1000;
@@ -109,6 +118,13 @@ public class ChatFragment extends Fragment {
 
         mChattingListView = (ListView)view.findViewById(R.id.chatting_list_view);
         mMsgEditText = (EditText)view.findViewById(R.id.msg_input_view);
+        mFileChooseBtn = (ImageButton)view.findViewById(R.id.msg_file_choose_btn);
+        mFileChooseBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showFileChooseActivity();
+            }
+        });
         mSendBtn = (Button)view.findViewById(R.id.msg_send_btn);
         mSendBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -125,7 +141,7 @@ public class ChatFragment extends Fragment {
                                     mConnClientInfo.uId,
                                     false);
 
-                    mMediaTransManager.sendMessage(mConnId, event);
+                    mMediaTransManager.sendEvent(mConnId, event);
 
                     mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
                 }
@@ -135,6 +151,31 @@ public class ChatFragment extends Fragment {
 
         mChattingAdapter = new ChattingAdapter();
         mChattingListView.setAdapter(mChattingAdapter);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+            if (resultCode == RESULT_OK) {
+                String filePathName = data.getStringExtra(EXTRA_FILE_CHOOSER);
+
+                if (!TextUtils.isEmpty(filePathName)) {
+                    mMediaTransManager.sendFile(mConnId, filePathName);
+                } else {
+
+                }
+            }
+
+        } else {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    private void showFileChooseActivity() {
+        Intent intent = new Intent();
+        intent.setClass(mContext, FileChooserActivity.class);
+
+        startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
     }
 
     private String getTimeString(long time) {
@@ -214,12 +255,12 @@ public class ChatFragment extends Fragment {
                 viewHolder = (ViewHolder) convertView.getTag();
             }
 
-            ChatMessageEvent prevEvent = null;
+            Event prevEvent = null;
             if (position > 0) {
                 prevEvent = getItem(position - 1);
             }
 
-            ChatMessageEvent event = getItem(position);
+            Event event = getItem(position);
             if (event != null) {
                 long prevMsgTime = prevEvent != null ? prevEvent.time : 0L;
 
@@ -231,8 +272,10 @@ public class ChatFragment extends Fragment {
                     viewHolder.time.setVisibility(View.GONE);
                 }
 
-
-                String msg = event.message;
+                String msg = "";
+                if (Event.EVENT_TYPE_CHAT == event.getEventType()) {
+                    msg = ((ChatMessageEvent)event).message;
+                }
 
                 if (event.isReceived) {
                     viewHolder.textMsgLeft.setText(msg);
@@ -246,7 +289,9 @@ public class ChatFragment extends Fragment {
                     viewHolder.textMsgLeft.setVisibility(View.GONE);
                 }
 
-                if (event.mState == Event.STATE_TIMEOUT || event.mState == Event.STATE_FAILED) {
+
+                if (event.mState == Event.STATE_TIMEOUT
+                        || event.mState == Event.STATE_FAILED) {
                     viewHolder.statusTextView.setText(R.string.chat_send_failed);
                     viewHolder.statusTextView.setVisibility(View.VISIBLE);
 
@@ -265,7 +310,7 @@ public class ChatFragment extends Fragment {
             return convertView;
         }
 
-        public ChatMessageEvent getItem(int position) {
+        public Event getItem(int position) {
             return mChatMessageList != null ? mChatMessageList.get(position) : null;
         }
     }

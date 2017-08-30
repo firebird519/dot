@@ -20,6 +20,13 @@ public abstract class Event {
     public static final int STATE_TIMEOUT = 3;
     public static final int STATE_FAILED = 4;
 
+    public static final int EVENT_TYPE_EVENT_HEAD = 0;
+
+    public static final int EVENT_TYPE_VERIFY = 1;
+    public static final int EVENT_TYPE_CLIENTNAME = 2;
+    public static final int EVENT_TYPE_CHAT = 3;
+    public static final int EVENT_TYPE_FILE = 4;
+
     @Expose(serialize = false)
     public int mState;
 
@@ -27,13 +34,24 @@ public abstract class Event {
     public long uniqueId = SystemClock.elapsedRealtime();
     public long time;
 
+    public boolean isReceived; // if it's true, means it send myself.
+
     public Event(int connectionId, long lTime) {
+        this(connectionId, lTime, false);
+    }
+
+    public Event(int connectionId, long lTime, boolean received) {
         time = lTime;
         connId = connectionId;
+        isReceived = received;
     }
 
     public void setEventCreateTime(long curTime) {
         time = curTime;
+    }
+
+    public void setIsReceived(boolean received) {
+        isReceived = received;
     }
 
     public String toJsonString() {
@@ -48,5 +66,5 @@ public abstract class Event {
         mState = state;
     }
 
-    public abstract String getEventTypeName();
+    public abstract int getEventType();
 }
