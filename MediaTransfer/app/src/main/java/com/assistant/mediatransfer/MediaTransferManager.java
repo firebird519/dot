@@ -1,6 +1,7 @@
 package com.assistant.mediatransfer;
 
 import android.content.Context;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -141,7 +142,7 @@ public class MediaTransferManager {
         String name = mSharePreferencesHelper.getString(SharePreferencesHelper.SP_KEY_CLIENT_NAME);
 
         if (TextUtils.isEmpty(name)) {
-            name = android.os.Build.PRODUCT;
+            name = Build.MODEL;
 
             if (TextUtils.isEmpty(name)) {
                 String currentTime = String.valueOf(System.currentTimeMillis());

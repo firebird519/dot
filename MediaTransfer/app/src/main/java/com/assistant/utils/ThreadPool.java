@@ -43,13 +43,13 @@ public class ThreadPool {
         }
 
         mIsShutdown = true;
-        /*new Thread(new Runnable() {
+        new Thread(new Runnable() {
 
             @Override
             public void run() {
                 shutdownAndAwaitTermination();
             }
-        }).start();*/
+        }).start();
     }
 
     private void shutdownAndAwaitTermination() {

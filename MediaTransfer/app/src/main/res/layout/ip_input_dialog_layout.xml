@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:padding="@dimen/client_item_padding">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="IP:"/>
+    <EditText
+        android:id="@+id/ip_address_input_edittext"
+        android:layout_width="@dimen/ip_input_edittext_width"
+        android:layout_height="wrap_content"
+        android:gravity="bottom"
+        android:digits="0123456789."
+        android:text="1.0.0.0"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Port:"/>
+    <EditText
+        android:id="@+id/port_input_edittext"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:inputType="number"
+        android:hint="port"/>
+</LinearLayout>

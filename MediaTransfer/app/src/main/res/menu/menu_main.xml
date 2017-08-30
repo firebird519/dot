@@ -3,6 +3,20 @@
       xmlns:tools="http://schemas.android.com/tools"
       tools:context="yalantis.com.sidemenu.MainActivity">
     <item
+        android:id="@+id/action_hide"
+        android:title="@string/action_settings"
+        android:checkable="true"
+        android:visible="false"
+        android:orderInCategory="100"
+        app:showAsAction="always"/>
+
+    <item
+        android:id="@+id/action_connectto"
+        android:title="@string/action_connectto"
+        android:orderInCategory="100"
+        app:showAsAction="never"/>
+
+    <item
         android:id="@+id/action_settings"
         android:title="@string/action_settings"
         android:orderInCategory="100"

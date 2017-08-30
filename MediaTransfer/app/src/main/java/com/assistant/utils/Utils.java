@@ -8,12 +8,17 @@ import android.os.storage.StorageManager;
 import android.util.Log;
 
 import java.io.File;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Utils {
-    public static final String DCIM = "DCIM";
-
     //TODO: change to false for official release.
     public static final boolean DEBUG = true;
+
+    public static final String DCIM = "DCIM";
+
+    private static final String IP_REXP =
+            "([1-9]|[1-9]\\d|1\\d{2}|2[0-4]\\d|25[0-5])(\\.(\\d|[1-9]\\d|1\\d{2}|2[0-4]\\d|25[0-5])){3}";
 
     public static int byteToInt(byte b) {
         return b & 0xff;
@@ -68,6 +73,18 @@ public class Utils {
         }
 
         return path;
+    }
+
+    public static boolean isIpPattern(String address) {
+        if (address.length() < 7 || address.length() > 15 || "".equals(address)) {
+            return false;
+        }
+
+        Pattern pat = Pattern.compile(IP_REXP);
+
+        Matcher mat = pat.matcher(address);
+
+        return mat.find();
     }
 
 }

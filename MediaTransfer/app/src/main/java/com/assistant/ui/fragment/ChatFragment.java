@@ -105,28 +105,30 @@ public class ChatFragment extends Fragment {
             }
         });*/
 
-        Log.d(this, "onViewCreated");
+        Log.d(this, "onDialogViewCreated");
 
         mChattingListView = (ListView)view.findViewById(R.id.chatting_list_view);
-
-        mSendBtn = (Button)view.findViewById(R.id.msg_send_btn);
         mMsgEditText = (EditText)view.findViewById(R.id.msg_input_view);
+        mSendBtn = (Button)view.findViewById(R.id.msg_send_btn);
         mSendBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 String msg = mMsgEditText.getText().toString();
-                mMsgEditText.setText("");
 
-                ChatMessageEvent event =
-                        new ChatMessageEvent(msg,
-                                System.currentTimeMillis(),
-                                mConnId,
-                                mConnClientInfo.uId,
-                                false);
+                if (msg.length() > 0) {
+                    mMsgEditText.setText("");
 
-                mMediaTransManager.sendMessage(mConnId, event);
+                    ChatMessageEvent event =
+                            new ChatMessageEvent(msg,
+                                    System.currentTimeMillis(),
+                                    mConnId,
+                                    mConnClientInfo.uId,
+                                    false);
 
-                mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
+                    mMediaTransManager.sendMessage(mConnId, event);
+
+                    mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
+                }
 
             }
         });

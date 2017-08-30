@@ -5,7 +5,7 @@
     android:layout_height="match_parent">
 
     <RelativeLayout
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
         <android.support.v7.widget.Toolbar
@@ -14,7 +14,17 @@
             android:layout_height="?attr/actionBarSize"
             android:background="?attr/colorPrimary"
             android:elevation="4dp"
-            android:theme="@style/ThemeOverlay.AppCompat.ActionBar" />
+            android:theme="@style/ThemeOverlay.AppCompat.ActionBar">
+
+            <Switch android:id="@+id/toolbar_switch_onoff"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="right"
+                android:paddingRight="@dimen/action_bar_switch_padding_right"
+                android:text=""
+                android:textOn=""
+                android:textOff=""/>
+        </android.support.v7.widget.Toolbar>>
 
         <RelativeLayout
             android:id="@+id/content_frame"
