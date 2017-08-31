@@ -2,38 +2,47 @@ package com.assistant.ui;
 
 import android.app.DialogFragment;
 import android.app.FragmentManager;
+import android.app.ProgressDialog;
 import android.content.Intent;
-import android.support.v4.widget.DrawerLayout;
-import android.support.v7.app.ActionBarDrawerToggle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
+import android.text.InputFilter;
+import android.text.Spanned;
+import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.CompoundButton;
-import android.widget.LinearLayout;
+import android.widget.EditText;
 import android.widget.Switch;
+import android.widget.Toast;
 
-import com.assistant.connection.Connection;
+import com.assistant.connection.ConnectionCreationCallback;
+import com.assistant.datastorage.SharePreferencesHelper;
+import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.fragment.AlertDialogFragment;
 import com.assistant.ui.fragment.ClientListFragment;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import yalantis.com.sidemenu.model.SlideMenuItem;
 
 import com.assistant.R;
-import com.assistant.ui.fragment.IpAddressInputFragment;
+import com.assistant.utils.Log;
+import com.assistant.utils.Utils;
 
-import yalantis.com.sidemenu.util.SideMenu;
-
-public class MainActivity extends AppCompatActivity implements AlertDialogFragment.AlertDialogCBInterface {
+public class MainActivity extends AppCompatActivity implements AlertDialogFragment.AlertDialogClickListener {
     private static final int DIALOG_ONOFF_ALERT = 0;
     private static final int DIALOG_IP_INOUT = 1;
 
     private Switch mOnOffSwitchBtn;
+
+    private ProgressDialog mProgressDialog;
+
+    private MediaTransferManager mMediaTransferManager;
+
+    private SharePreferencesHelper mSharePreferencesHelper;
+
     /*
     private List<SlideMenuItem> mMenuItemList = new ArrayList<>();
     private SideMenu mSideMenu;
@@ -42,11 +51,34 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
     private ActionBarDrawerToggle mDrawerToggle;
     private LinearLayout mLinearLayout;
     */
+
+    private static final int EVENT_IP_CONNECT_RESULT = 0;
+
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case EVENT_IP_CONNECT_RESULT:
+                    int strId = (msg.arg1 == 1) ? R.string.ip_connect_success : R.string.ip_connect_failed;
+                    showToastMessage(getApplicationContext().getString(strId, (String)msg.obj));
+
+                    stopProgressBar();
+                    break;
+                default:
+                    break;
+            }
+            super.handleMessage(msg);
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         //initSideMenu();
+
+        mSharePreferencesHelper = SharePreferencesHelper.getInstance(getApplicationContext());
+        mMediaTransferManager = MediaTransferManager.getInstance(getApplicationContext());
 
         initActionBar();
 
@@ -67,13 +99,20 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+
+        stopProgressBar();
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         final int itemId = item.getItemId();
         if (itemId == android.R.id.home) {  // See ActionBar#setDisplayHomeAsUpEnabled()
             onBackPressed();
             return true;
         } else if (itemId == R.id.action_connectto) {
-            showNetworkOffAlertDialog(DIALOG_IP_INOUT,
+            showAlertDialog(DIALOG_IP_INOUT,
                     0,
                     0,
                     R.layout.ip_input_dialog_layout);
@@ -92,7 +131,7 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         startActivity(intent);
     }
 
-    private void showNetworkOffAlertDialog(int dialogId, int textId, int iconId, int layoutId) {
+    private void showAlertDialog(int dialogId, int textId, int iconId, int layoutId) {
         DialogFragment newFragment = AlertDialogFragment.newInstance(dialogId,
                 textId,
                 iconId, layoutId);
@@ -101,33 +140,158 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
 
     @Override
     public void onDialogViewCreated(int dialogId, View view) {
-        if (dialogId == DIALOG_IP_INOUT) {
+        switch (dialogId) {
+            case DIALOG_ONOFF_ALERT:
+                break;
+            case DIALOG_IP_INOUT:
+                handleIpInputViewCreated(view);
+                break;
+            default:
+                break;
+        }
+    }
 
+    private void handleIpInputViewCreated(View view) {
+        if (view == null) {
+            Log.d(this, "handleIpInputViewCreated, view is null.");
+            return;
+        }
+        EditText portEditText = (EditText)view.findViewById(R.id.port_input_edittext);
+        portEditText.setText(String.valueOf(mMediaTransferManager.getPort()));
+
+        EditText ipEditText = (EditText)view.findViewById(R.id.ip_address_input_edittext);
+        ipEditText.setFilters(new InputFilter[] {
+                new InputFilter() {
+                    @Override
+                    public CharSequence filter(CharSequence source, int start, int end,
+                                               Spanned dest, int dstart, int dend) {
+                        String result = String.valueOf(dest.subSequence(0, dstart))
+                                + source.subSequence(start, end)
+                                + dest.subSequence(dend, dest.length());
+
+                        if (!Utils.isIpPattern(result)) {
+                            Log.d(this, "input string not match ip pattern, result:" + result +
+                                    ", source:" + source +
+                                    ", start:" + start +
+                                    ", end:" + end +
+                                    ", dest:" + dest.toString() +
+                                    ", dstart:" + dstart +
+                                    ", dend:" + dend);
+
+                            return "";
+                        }
+
+                        return null;
+                    }
+                }
+
+        });
+    }
+
+    class ConnectionCreationListener extends ConnectionCreationCallback {
+        public ConnectionCreationListener(String ipAddress) {
+            ip = ipAddress;
+        }
+
+        @Override
+        public void onResult(boolean ret) {
+            Message msg = mHandler.obtainMessage(EVENT_IP_CONNECT_RESULT, ret ? 1 : 0, 0);
+            msg.obj = ip;
+
+            msg.sendToTarget();
+        }
+    }
+
+    private void handleIpInput(View view) {
+        EditText ipEditText = (EditText)view.findViewById(R.id.ip_address_input_edittext);
+        EditText portEditText = (EditText)view.findViewById(R.id.port_input_edittext);
+
+        if (ipEditText != null && portEditText != null) {
+            showProgressBar();
+
+            String ip = ipEditText.getText().toString();
+            String port = portEditText.getText().toString();
+            if (!TextUtils.isEmpty(ip) && !TextUtils.isEmpty(port)) {
+                mMediaTransferManager.connectTo(ip, Integer.valueOf(port),new ConnectionCreationListener(ip));
+            } else {
+                showToastMessage(R.string.ip_input_value_error);
+            }
+        } else {
+            showToastMessage(R.string.ip_input_value_error);
+        }
+    }
+
+    private void showProgressBar() {
+        mProgressDialog = new ProgressDialog(MainActivity.this);
+        mProgressDialog.setMessage(getResources().getString(R.string.connecting));
+        mProgressDialog.show();
+    }
+
+    private void stopProgressBar() {
+        if (mProgressDialog != null) {
+            mProgressDialog.dismiss();
+            mProgressDialog = null;
+        }
+    }
+
+    private void showToastMessage(int msgId) {
+        Toast.makeText(this, msgId, Toast.LENGTH_SHORT).show();
+    }
+
+    private void showToastMessage(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onPositiveBtnClicked(int dialogId, View view) {
+        switch (dialogId) {
+            case DIALOG_ONOFF_ALERT:
+                mSharePreferencesHelper.save(SharePreferencesHelper.SP_KEY_NETWORK_ON, 0);
+                mMediaTransferManager.stopAllConnections();
+                break;
+            case DIALOG_IP_INOUT:
+                handleIpInput(view);
+                break;
+            default:
+                break;
         }
     }
 
     @Override
-    public void onDialogPositiveBtnClick(int dialogId, View view) {
-        // stop connection searching and listening
-    }
-
-    @Override
-    public void onDialogNegativeBtnClick(int dialogId) {
-        mOnOffSwitchBtn.setChecked(true);
+    public void onNegativeBtnClicked(int dialogId) {
+        switch (dialogId) {
+            case DIALOG_ONOFF_ALERT:
+                mOnOffSwitchBtn.setChecked(true);
+                break;
+            case DIALOG_IP_INOUT:
+                break;
+            default:
+                break;
+        }
     }
 
     private void initActionBar() {
         mOnOffSwitchBtn = (Switch) findViewById(R.id.toolbar_switch_onoff);
+
+        if (mSharePreferencesHelper.getInt(SharePreferencesHelper.SP_KEY_NETWORK_ON, 1) == 1) {
+            mOnOffSwitchBtn.setChecked(true);
+        } else {
+            mOnOffSwitchBtn.setChecked(false);
+        }
+
         mOnOffSwitchBtn.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (!isChecked) {
-                    showNetworkOffAlertDialog(DIALOG_ONOFF_ALERT,
+                    showAlertDialog(DIALOG_ONOFF_ALERT,
                             R.string.media_transfer_off_dialog_title,
                             0,
                             0);
                 } else {
                     // open connection listening and host search
+                    mSharePreferencesHelper.save(SharePreferencesHelper.SP_KEY_NETWORK_ON, 1);
+                    mMediaTransferManager.startListen();
+                    mMediaTransferManager.startSearchHost(null);
                 }
             }
         });

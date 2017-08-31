@@ -86,10 +86,7 @@ public class CircleIndicatorView extends View {
     private void CalTextSize() {
         mTextRectWidth = (int) mTextPaint.measureText(mIndicatorText);
 
-        //mTextRectWidth = rect.width();
         mTextRectHeight = (int)(mTextPaint.descent() + mTextPaint.ascent());
-
-        Log.d(TAG, "CalTextSize");
     }
 
     public void setText(String text) {
@@ -101,10 +98,9 @@ public class CircleIndicatorView extends View {
     }
 
     @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
 
-        // TODO: move out of here later?
         CalTextSize();
     }
 

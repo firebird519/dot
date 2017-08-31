@@ -35,7 +35,7 @@ public class SettingActivity extends PreferenceActivity
         mClientNamePrefence = (EditTextPreference)findPreference(CLINET_NAME_KEY);
         mClientNamePrefence.setOnPreferenceChangeListener(this);
 
-        mSharePreferencesHelper = new SharePreferencesHelper(this);
+        mSharePreferencesHelper = SharePreferencesHelper.getInstance(this);
     }
 
     @Override

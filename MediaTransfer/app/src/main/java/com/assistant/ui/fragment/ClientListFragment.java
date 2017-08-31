@@ -18,7 +18,9 @@ import android.widget.TextView;
 
 import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
+import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.events.ClientInfo;
+import com.assistant.events.Event;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.ChattingActivity;
 import com.assistant.ui.view.CircleIndicatorView;
@@ -44,6 +46,8 @@ public class ClientListFragment extends Fragment {
     private ConnectionManager mConnManager;
     private MediaTransferManager mMediaTransferManager;
     private LayoutInflater mLayoutInflater = null;
+
+    private SharePreferencesHelper mSharePreferencesHelper;
 
     private Activity mActivity;
 
@@ -98,11 +102,23 @@ public class ClientListFragment extends Fragment {
         });
     }
 
+    private boolean isNetworkSettingsOn() {
+        boolean isOn = false;
+
+        if (mSharePreferencesHelper != null) {
+            isOn = mSharePreferencesHelper.getInt(SharePreferencesHelper.SP_KEY_NETWORK_ON, 1) == 1;
+        }
+
+        return isOn;
+    }
+
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
 
         mActivity = getActivity();
+
+        mSharePreferencesHelper = SharePreferencesHelper.getInstance(mActivity);
 
         mConnManager = ConnectionManager.getInstance(getActivity().getApplicationContext());
         mLayoutInflater = (LayoutInflater) getActivity()
@@ -110,40 +126,50 @@ public class ClientListFragment extends Fragment {
         mMediaTransferManager = MediaTransferManager.getInstance(
                 getActivity().getApplicationContext());
 
-
-        mConnManager.listen(mMediaTransferManager.getDefaultPort());
-
-        mConnManager.addListener(new ConnectionManager.ConnectionManagerListenerBase() {
+        mMediaTransferManager.addListener(new MediaTransferManager.MediaTransferListener() {
             @Override
-            public void onConnectionAdded(int id) {
+            public void onClientAvailable(int id, ClientInfo info) {
                 mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
             }
 
             @Override
-            public void onConnectionRemoved(int id, int reason) {
+            public void onClientDisconnected(int id, int reason) {
                 mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
+            }
+
+            @Override
+            public void onMessageReceived(int clientId, Event msg) {
+
+            }
+
+            @Override
+            public void onMessageSendResult(int clientId, int msgId, boolean isSuccess) {
+
             }
         });
     }
 
     @Override
     public void onResume() {
-        showIndicatorText(R.string.searching);
+        if (isNetworkSettingsOn()) {
+            mMediaTransferManager.startListen();
 
-        mMediaTransferManager.startSearchHost(
-                new ConnectionManager.SearchListener() {
-            @Override
-            public void onSearchCompleted() {
-                Log.d(this, "onSearchCompleted");
-                mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
-            }
+            showIndicatorText(R.string.searching);
+            mMediaTransferManager.startSearchHost(
+                    new ConnectionManager.SearchListener() {
+                        @Override
+                        public void onSearchCompleted() {
+                            Log.d(this, "onSearchCompleted");
+                            mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
+                        }
 
-            @Override
-            public void onSearchCanceled(int reason) {
-                Log.d(this, "onSearchCanceled");
-                mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
-            }
-        });
+                        @Override
+                        public void onSearchCanceled(int reason) {
+                            Log.d(this, "onSearchCanceled");
+                            mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
+                        }
+                    });
+        }
 
         super.onResume();
     }
@@ -166,7 +192,7 @@ public class ClientListFragment extends Fragment {
     }
 
     class ClientListAdapter extends BaseAdapter {
-        Integer[] mConnKeys = null;
+        Integer[] mConnIds = null;
 
         @Override
         public int getCount() {
@@ -174,16 +200,16 @@ public class ClientListFragment extends Fragment {
                 return 0;
             }
 
-            mConnKeys = mConnManager.getConnectionIds();
-            return mConnKeys != null ? mConnKeys.length : 0;
+            mConnIds = mMediaTransferManager.getConnectionIds();
+            return mConnIds != null ? mConnIds.length : 0;
         }
 
         @Override
         public Object getItem(int position) {
             int id = -1;
 
-            if (position >= 0 && mConnKeys != null && position < mConnKeys.length) {
-                id = mConnKeys[position];
+            if (position >= 0 && mConnIds != null && position < mConnIds.length) {
+                id = mConnIds[position];
             }
             Connection conn = null;
 
@@ -196,8 +222,8 @@ public class ClientListFragment extends Fragment {
         @Override
         public long getItemId(int position) {
             int id = -1;
-            if (position >= 0 && mConnKeys != null && position < mConnKeys.length) {
-                id = mConnKeys[position];
+            if (position >= 0 && mConnIds != null && position < mConnIds.length) {
+                id = mConnIds[position];
             }
 
             return id;

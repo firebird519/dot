@@ -1,8 +1,12 @@
-<resources>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="app_name">MediaTransfer</string>
 
     <string name="quit">Quit</string>
     <string name="back">Back</string>
+    <string name="connecting">Connectiing</string>
+    <string name="ip_input_value_error">Please input correct ip and port number!</string>
+    <string name="ip_connect_success">IP <xliff:g id="ip">%s</xliff:g> connected successfully!</string>
+    <string name="ip_connect_failed">IP <xliff:g id="ip">%s</xliff:g> connected failed!</string>
 
     <string name="action_settings">Settings</string>
     <string name="action_connectto">Connect to</string>

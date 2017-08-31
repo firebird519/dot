@@ -37,9 +37,9 @@ public class Connection {
     private static final String TAG = "Connection";
 
     public interface ConnectionListener {
-        void onConnected();
-        void onConnectFailed(int reasonCode);
-        void onClosed(int reasonCode);
+        void onConnected(Connection connection);
+        void onConnectFailed(Connection connection, int reasonCode);
+        void onClosed(Connection connection, int reasonCode);
     }
 
     private Set<ConnectionListener> mListeners =
@@ -59,6 +59,7 @@ public class Connection {
     public static final int CONNECTION_REASON_CODE_SOCKET_SENDING = -3;
     public static final int CONNECTION_REASON_CODE_NOT_CONNECTED = -4;
     public static final int CONNECTION_REASON_CODE_SOCKET_RECEIVING= -5;
+    public static final int CONNECTION_REASON_CODE_IP_ALREADY_CONNECTED = -6;
 
     private int mLastReasonCode;
 
@@ -74,11 +75,6 @@ public class Connection {
     private Object mConnData = null;
 
     private int mId = -1;
-
-    // TODO: this uId should be always same for same client.
-    // which should be sent to each other when connected.
-    // CURRENT STEP1: we only try to make sure it's unique for all connections.
-    private String mUniqueId;
 
     private boolean mIsHost;
 
@@ -108,7 +104,7 @@ public class Connection {
             mState = CONNECTION_STATE_NOT_CONNECTED;
         }
 
-        mThreadPool = new ThreadPool(2);
+        mThreadPool = new ThreadPool(3);
 
         HandlerThread thread = new HandlerThread("connectionHandlerThread");
         thread.start();
@@ -139,19 +135,12 @@ public class Connection {
 
     public void setId(final int id) {
         mId = id;
-        mUniqueId = System.currentTimeMillis() + ":" + mId;
+
+        Log.d(TAG, "id:" + id + ", ip:" + getIp());
     }
 
     public int getId() {
         return mId;
-    }
-
-    public void setUniqueId(String uniqueId) {
-        mUniqueId = uniqueId;
-    }
-
-    public String getUniqueId() {
-        return mUniqueId;
     }
 
     public boolean isHost() {
@@ -168,9 +157,11 @@ public class Connection {
     }
 
     public void connect(final String ip, final int port) {
+        Log.d(TAG, "Connection connect ip:" + ip + ", port:" + port);
         mThreadPool.addTask(new Runnable() {
             @Override
             public void run() {
+                Log.d(TAG, "Connection connect ip:" + ip + " task running)");
                 createSocketAndNotify(ip, port);
             }
         });
@@ -188,7 +179,7 @@ public class Connection {
         }
 
         Log.d(TAG, "send, mState:" + mState + ", mIsDataSending:" + mIsDataSending +
-                "mSocketOutputStream:" + mSocketOutputStream);
+                ",mSocketOutputStream:" + mSocketOutputStream);
         if (mIsDataSending) {
             return CONNECTION_REASON_CODE_SOCKET_SENDING;
         }
@@ -226,6 +217,10 @@ public class Connection {
 
                 Log.d(this, "send, sentCount:" + sentCount +
                         ", countNotSend:" + countNotSend);
+
+                if (isValidReason(mToBeClosedReason)) {
+                    break;
+                }
             } while (countNotSend > 0);
 
             synchronized (mSocketOutputStreamLock) {
@@ -244,6 +239,10 @@ public class Connection {
 
         mIsDataSending = false;
         Log.d(TAG, "send, sentCount:" + sentCount);
+
+        if (isValidReason(mToBeClosedReason)) {
+            closeInteranl(mToBeClosedReason);
+        }
 
         return sentCount;
     }
@@ -298,12 +297,17 @@ public class Connection {
             receivedCount += receivedEverytime;
 
             // TODO: log received data details for debug
-
-            if (size == receivedCount || (receivedCount == bufSize)) {
+            if (size == receivedCount || (receivedCount == bufSize) || isValidReason(mToBeClosedReason)) {
                 mIsDataReceiving = false;
 
                 break;
             }
+        }
+
+        if (isValidReason(mToBeClosedReason)) {
+            closeInteranl(mToBeClosedReason);
+
+            return 0;
         }
 
         // ignore previous heart beat event which only needed if there is no data traffic.
@@ -323,9 +327,15 @@ public class Connection {
             notifyConnectFailed(CONNECTION_REASON_CODE_IO_EXCEPTION);
         }
 
-        initSocketSteam();
+        Log.d(TAG, "createSocketAndNotify, ip:" + ip + ", socket:" + mSocket);
 
-        notifyConnected();
+        if (mSocket != null) {
+            mState = CONNECTION_STATE_CONNECTED;
+
+            initSocketSteam();
+
+            notifyConnected();
+        }
     }
 
     private void initSocketSteam() {
@@ -384,13 +394,13 @@ public class Connection {
                     // output stream closed, data sending will be canceled.
                     mIsDataSending = false;
 
-                    mSocketInputStream.close();
+                    mSocketOutputStream.close();
                 } catch (IOException ioe) {
                     ioe.printStackTrace();
                 }
             }
 
-            mSocketInputStream = null;
+            mSocketOutputStream = null;
         }
     }
 
@@ -412,13 +422,27 @@ public class Connection {
         closeInteranl(CONNECTION_STATE_CLOSE_MANUAL);
     }
 
-    private void closeInteranl(int reason) {
-        closeSocket(reason);
+    public void close(int reason) {
+        closeInteranl(reason);
+    }
 
-        mListeners.clear();
+    private boolean isValidReason(int reason) {
+        return reason <= 0;
+    }
+
+    private int mToBeClosedReason = 100;
+    private void closeInteranl(int reason) {
+        if (!mIsDataSending) {
+            closeSocket(reason);
+
+            mListeners.clear();
+        } else {
+            mToBeClosedReason = reason;
+        }
     }
 
     private void closeSocket(int reason) {
+        mToBeClosedReason = 100;
         mLastReasonCode = reason;
 
         closeSocketOutputStream();
@@ -441,7 +465,9 @@ public class Connection {
     //=====
     // listener implementation
     public void addListner(ConnectionListener listener) {
-        mListeners.add(listener);
+        if (listener != null) {
+            mListeners.add(listener);
+        }
     }
 
     public void removeListener(ConnectionListener listener) {
@@ -450,19 +476,19 @@ public class Connection {
 
     private void notifyConnected() {
         for(ConnectionListener listener : mListeners) {
-            listener.onConnected();
+            listener.onConnected(this);
         }
     }
 
     private void notifyConnectFailed(int reason) {
         for(ConnectionListener listener : mListeners) {
-            listener.onConnectFailed(reason);
+            listener.onConnectFailed(this, reason);
         }
     }
 
     private void notifyClosed(int reason) {
         for(ConnectionListener listener : mListeners) {
-            listener.onClosed(reason);
+            listener.onClosed(this, reason);
         }
     }
 }

@@ -1,12 +1,12 @@
-1. connectto
+1. connectto -- done
 2. file send
 3. file receive and show
 4. wakelock for socket data receiving
 5. online update
+6. add dump for managers...
+7. message and connection notification
 
 10. multi ip segment search
 11. picture show etc
 12. message saving in disk
-
-
 

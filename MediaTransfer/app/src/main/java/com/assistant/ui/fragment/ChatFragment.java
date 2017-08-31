@@ -66,6 +66,7 @@ public class ChatFragment extends Fragment {
 
     private static final int EVENT_LIST_UPDATE = 0;
     private static final int EVENT_SCREEN_UPDATE = 1;
+    private static final int EVENT_CONNECTION_DISCONNECTED = 2;
 
     private Handler mHandler = new Handler() {
         @Override
@@ -76,6 +77,9 @@ public class ChatFragment extends Fragment {
                     break;
                 case EVENT_SCREEN_UPDATE:
                     updateChatScreen();
+                    break;
+                case EVENT_CONNECTION_DISCONNECTED:
+                    handleConnectionDisconnected();
                     break;
                 default:
                     break;
@@ -211,6 +215,11 @@ public class ChatFragment extends Fragment {
                 }
 
                 @Override
+                public void onClientDisconnected(int id, int reason) {
+                    mHandler.sendEmptyMessage(EVENT_CONNECTION_DISCONNECTED);
+                }
+
+                @Override
                 public void onMessageReceived(int clientId, Event msg) {
                     mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
                 }
@@ -221,6 +230,13 @@ public class ChatFragment extends Fragment {
                 }
             });
         }
+    }
+
+    private void handleConnectionDisconnected() {
+        mSendBtn.setEnabled(false);
+        mMsgEditText.setEnabled(false);
+        mChattingListView.setEnabled(false);
+        mFileChooseBtn.setEnabled(false);
     }
 
     private void updateChatScreen() {

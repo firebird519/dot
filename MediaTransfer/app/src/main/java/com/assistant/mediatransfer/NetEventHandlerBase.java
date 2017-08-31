@@ -111,7 +111,7 @@ public abstract class NetEventHandlerBase {
         EventHead netEvent = new EventHead(event.getEventType(), event.toJsonString());
         byte[] bytes = netEvent.toBytes();
 
-        Log.d(this, "sendEvent, eventType:" + event.getEventType());
+        Log.d(this, "sendEvent, eventType:" + event.getEventType() + ", event name:" + event.getClass());
         mConnectionManager.sendEvent(connId, event.uniqueId,  bytes, bytes.length,
                 new DataSendListener() {
             @Override

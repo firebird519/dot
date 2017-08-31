@@ -14,6 +14,11 @@ import android.util.Log;
 
 import com.assistant.R;
 
+/**
+ * This image progress bar is one progress which will remove cover color fom top to end as the value
+ * of progress
+ *
+ */
 public class ImageProgressBar extends AppCompatImageView {
     private static final int COVER_COLOR_ALPHA = 120;
     private static final int PROGRESS_TEXT_FONT = 80;

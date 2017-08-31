@@ -14,8 +14,18 @@ public class SharePreferencesHelper {
     public static final String SP_KEY_UNIQUE_ID = "uId";
     public static final String SP_KEY_PORT = "port";
     public static final String SP_KEY_CLIENT_NAME = "clientName";
+    public static final String SP_KEY_NETWORK_ON = "networkOn";
 
-    public SharePreferencesHelper(Context context) {
+    private static SharePreferencesHelper sSharePreferencesHelper = null;
+    public static SharePreferencesHelper getInstance(Context context) {
+        if (sSharePreferencesHelper == null) {
+            sSharePreferencesHelper = new SharePreferencesHelper(context);
+        }
+
+        return sSharePreferencesHelper;
+    }
+
+    private SharePreferencesHelper(Context context) {
         mSharedPreferences = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE);
     }
 
@@ -37,7 +47,7 @@ public class SharePreferencesHelper {
         return mSharedPreferences.getString(key, "");
     }
 
-    public int getInt(String key) {
-        return mSharedPreferences.getInt(key, 0);
+    public int getInt(String key, int defaultValue) {
+        return mSharedPreferences.getInt(key, defaultValue);
     }
 }

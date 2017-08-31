@@ -30,8 +30,9 @@ public class ConnectionFactory {
         Connection conn = new Connection(null, false);
 
         if (conn != null) {
-            conn.addListner(listener);
-
+            if (listener != null) {
+                conn.addListner(listener);
+            }
             conn.connect(ip, port);
         }
 
