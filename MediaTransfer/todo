@@ -1,7 +1,6 @@
 1. connectto -- done
-2. file send
-3. file receive and show
-4. wakelock for socket data receiving
+2. file send/receive
+4. wakelock for socket data receiving  -- done
 5. online update
 6. add dump for managers...
 7. message and connection notification

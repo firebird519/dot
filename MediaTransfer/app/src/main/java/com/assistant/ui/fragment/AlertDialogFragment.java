@@ -47,7 +47,21 @@ public class AlertDialogFragment extends DialogFragment {
     }
 
     @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+    }
+
+    @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
+        // in some older version, mContext value is null at this point...
+        if (mContext == null) {
+            mContext = getActivity();
+        }
+
+        if (mContext == null) {
+            return null;
+        }
+
         final int dialogId = getArguments().getInt(DIALOG_ID_KEY);
         int title = getArguments().getInt(TITLE_KEY);
         int icon = getArguments().getInt(ICON_KEY);

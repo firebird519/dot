@@ -23,7 +23,8 @@
         android:layout_height="wrap_content"
         android:layout_below="@id/client_name"
         android:paddingTop="@dimen/client_item_top_padding"
-        android:paddingBottom="@dimen/client_item_top_padding"/>
+        android:paddingBottom="@dimen/client_item_top_padding"
+        android:singleLine="true"/>
 
     <com.assistant.ui.view.CircleIndicatorView
         android:id="@+id/indicator_text"

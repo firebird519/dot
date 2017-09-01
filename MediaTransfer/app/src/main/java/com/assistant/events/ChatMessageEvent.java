@@ -21,4 +21,9 @@ public class ChatMessageEvent extends Event {
     public int getEventType() {
         return EVENT_TYPE_CHAT;
     }
+
+    @Override
+    public String toString() {
+        return "ChatMessageEvent, connId:" + connId + ", message:" + message;
+    }
 }

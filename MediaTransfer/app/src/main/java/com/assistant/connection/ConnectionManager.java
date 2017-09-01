@@ -1,10 +1,12 @@
 package com.assistant.connection;
 
 import android.content.Context;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.text.TextUtils;
 
@@ -28,7 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static com.assistant.connection.HostSearchHandler.SERVER_SEARCH_CANCELED;
 
@@ -78,7 +80,7 @@ public class ConnectionManager {
     private class ConnectionListenerImpl implements Connection.ConnectionListener {
         @Override
         public void onConnected(Connection conn) {
-            addConnection(conn);
+            mThreadHandler.obtainMessage(EVENT_CONNECTION_ADDED, conn).sendToTarget();
 
             Log.d(TAG, "connection connected for ip:" + conn.getIp());
         }
@@ -86,22 +88,23 @@ public class ConnectionManager {
         @Override
         public void onConnectFailed(Connection conn, int reasonCode) {
             Log.d(TAG, "connection connected failed for ip:" + conn.getIp());
-            removeConnection(conn, reasonCode);
-
-            conn.removeListener(this);
+            mThreadHandler
+                    .obtainMessage(EVENT_CONNECTION_CONNECT_FAILED, reasonCode, 0, conn)
+                    .sendToTarget();
         }
 
         @Override
         public void onClosed(Connection conn, int reasonCode) {
             Log.d(TAG, "connection closed for ip:" + conn.getIp() + ", id:" + conn.getId() + ", reason:" + reasonCode);
 
-            removeConnection(conn, reasonCode);
-            conn.removeListener(this);
+            mThreadHandler
+                    .obtainMessage(EVENT_CONNECTION_CLOSED, reasonCode, 0, conn)
+                    .sendToTarget();
         }
     }
 
-    private Set<ConnectionManagerListener> mListeners =
-            Collections.synchronizedSet(new HashSet<ConnectionManagerListener>());
+    private List<ConnectionManagerListener> mListeners =
+            new CopyOnWriteArrayList<ConnectionManagerListener>();
 
     private final Map<Integer, Connection> mConnections =
             Collections.synchronizedMap(new HashMap<Integer, Connection>());
@@ -118,11 +121,13 @@ public class ConnectionManager {
     private boolean mStopped = false;
 
     private static final int EVENT_CONNECTION_ADDED = 0;
-    private static final int EVENT_CONNECTION_REMOVED = 1;
-    private static final int EVENT_CONNECTION_DATA_RECEIVED = 2;
-    private static final int EVENT_CONNECTION_CREATION_TIMEOUT = 3;
+    private static final int EVENT_CONNECTION_CLOSED = 1;
+    private static final int EVENT_CONNECTION_CONNECT_FAILED = 2;
+    private static final int EVENT_CONNECTION_DATA_RECEIVED = 3;
+    private static final int EVENT_CONNECTION_CREATION_TIMEOUT = 4;
+    private static final int EVENT_HOSTCONNECTION_CLOSED = 5;
 
-    private static final int CONNECTION_CREATION_TIMEOUT_TIMESTAMP = 60*1000; //60s
+    private static final int CONNECTION_CREATION_TIMEOUT_TIMESTAMP = 70*1000; //60s
     class ConnMgrThreadHandler extends Handler {
         public ConnMgrThreadHandler(Looper looper) {
             super(looper);
@@ -132,16 +137,22 @@ public class ConnectionManager {
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case EVENT_CONNECTION_ADDED:
-                    notifyConnectionAdded(msg.arg1);
+                    handleConnectionAdded((Connection) msg.obj);
                     break;
-                case EVENT_CONNECTION_REMOVED:
-                    notifyConnectionRemoved(msg.arg1, msg.arg2);
+                case EVENT_CONNECTION_CONNECT_FAILED:
+                    handleConnectionRemoved((Connection)msg.obj, msg.arg1);
+                    break;
+                case EVENT_CONNECTION_CLOSED:
+                    handleConnectionRemoved((Connection)msg.obj, msg.arg1);
                     break;
                 case EVENT_CONNECTION_DATA_RECEIVED:
                     notifyDataReceived(msg.arg1, (String)msg.obj, (msg.arg2 == 1));
                     break;
                 case EVENT_CONNECTION_CREATION_TIMEOUT:
-                    handleConnectionCreationTimeout((ConnectionCreationCallback) msg.obj);
+                    handleConnectionCreationTimeout((Connection) msg.obj);
+                    break;
+                case EVENT_HOSTCONNECTION_CLOSED:
+                    handleHostConnectionClosed((HostConnection) msg.obj, msg.arg1);
                     break;
                 default:
                     break;
@@ -170,33 +181,51 @@ public class ConnectionManager {
         }
     }
 
-    public void addConnection(final Connection connection) {
+    public void handleConnectionAdded(final Connection connection) {
         synchronized (mConnections) {
             if (connection != null && !mConnections.containsValue(connection)) {
                 String ipAddress = connection.getIp();
                 if (isIpConnected(ipAddress) && !(Utils.DEBUG && mConnections.size() <= 2)) {
-                    Log.d(this, "addConnection: ipAddress already connected!");
+                    Log.d(this, "handleConnectionAdded: ipAddress already connected!");
                     connection.close(Connection.CONNECTION_REASON_CODE_IP_ALREADY_CONNECTED);
+
+                    logConnectionList();
                     return;
                 }
 
                 connection.setId(generateConnectionId());
+                connection.setWakeLock(
+                        generateNetworkWakeLock(String.valueOf(connection.getId()) + ":0"),
+                        generateNetworkWakeLock(String.valueOf(connection.getId()) + ":1"));
                 mConnections.put(connection.getId(), connection);
 
                 connection.addListner(new ConnectionListenerImpl());
+                notifyConnectionAdded(connection.getId());
 
                 connection.startHeartBeat();
 
-                mThreadHandler.obtainMessage(EVENT_CONNECTION_ADDED, connection.getId(), 0).
-                        sendToTarget();
-
                 new ConnectionReceiverThread(connection).start();
+
+                logConnectionList();
             }
         }
     }
 
+    private void handleConnectionRemoved(Connection connection, int reason) {
+        Log.d(TAG, "handleConnectionRemoved, id:" + connection.getId() + ", ip:"
+                + connection.getIp() + ", reason:" + reason);
+        synchronized (mConnections) {
+            mConnections.remove(connection.getId());
+
+            notifyConnectionRemoved(connection.getId(), reason);
+            logConnectionList();
+        }
+    }
+
     public Connection getConnection(int id) {
-        return mConnections.get(id);
+        synchronized (mConnections) {
+            return mConnections.get(id);
+        }
     }
 
     public ClientInfo getClientInfo(int connId) {
@@ -229,6 +258,7 @@ public class ConnectionManager {
         synchronized (mConnections) {
             for (Connection conn : mConnections.values()) {
                 if (TextUtils.equals(conn.getIp(), ip)) {
+                    Log.d(TAG, "isIpConnected:" + ip);
                     return true;
                 }
             }
@@ -260,16 +290,6 @@ public class ConnectionManager {
         Log.d(TAG, "generateConnectionId:" + sConnIdBase);
 
         return sConnIdBase;
-    }
-
-    private void removeConnection(Connection connection, int reason) {
-        Log.d(TAG, "removeConnection, id:" + connection.getId() + ", ip:"
-                + connection.getIp() + ", reason:" + reason);
-        synchronized (mConnections) {
-            mConnections.remove(connection);
-
-            mThreadHandler.obtainMessage(EVENT_CONNECTION_REMOVED, connection.getId(), reason);
-        }
     }
 
     public void stopAllConnections() {
@@ -788,24 +808,30 @@ public class ConnectionManager {
     }
 
     public void connectTo(final String ipAddress, int port, final ConnectionCreationCallback listener) {
+        mStopped = false;
+
         if (isIpConnected(ipAddress)) {
-            notifyConnectionCreationResult(listener, true);
+            notifyConnectionCreationResult(null, listener, true);
             return;
         }
+
+        Log.d(TAG, "connectTo ip:" + ipAddress);
 
         Connection connection =
                 ConnectionFactory.createConnection(ipAddress, port, new Connection.ConnectionListener() {
                     @Override
                     public void onConnected(Connection conn) {
                         Log.d(TAG, "connectTo, onConnected for " + conn.getIp()
-                                + ", ipAddress:" + ipAddress);
+                                + ", ipAddress:" + ipAddress + ", mStopped:" + mStopped);
 
                         if (!mStopped) {
-                            notifyConnectionCreationResult(listener, true);
+                            mThreadHandler
+                                    .obtainMessage(EVENT_CONNECTION_ADDED, conn)
+                                    .sendToTarget();
 
-                            addConnection(conn);
+                            notifyConnectionCreationResult(conn, listener, true);
                         } else {
-                            notifyConnectionCreationResult(listener, false);
+                            notifyConnectionCreationResult(conn, listener, false);
                         }
 
                         conn.removeListener(this);
@@ -816,7 +842,7 @@ public class ConnectionManager {
                         Log.d(TAG, "connectTo, onConnectFailed for " + conn.getIp()
                                 + ", ipAddress:" + ipAddress);
 
-                        notifyConnectionCreationResult(listener, false);
+                        notifyConnectionCreationResult(conn, listener, false);
 
                         conn.removeListener(this);
                     }
@@ -826,55 +852,66 @@ public class ConnectionManager {
                         Log.d(TAG, "connectTo, onClosed for " + conn.getIp()
                                 + ", ipAddress:" + ipAddress);
 
-                        notifyConnectionCreationResult(listener, false);
+                        notifyConnectionCreationResult(conn, listener, false);
 
                         conn.removeListener(this);
                     }
                 });
 
         if (connection == null) {
-            notifyConnectionCreationResult(listener, false);
+            Log.d(TAG, "connectTo ip:" + ipAddress + ", connection creation failed!");
+            notifyConnectionCreationResult(null, listener, false);
         } else if(listener != null) {
-            Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CREATION_TIMEOUT, listener);
+            Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
             mThreadHandler.sendMessageDelayed(msg, CONNECTION_CREATION_TIMEOUT_TIMESTAMP);
         }
     }
 
-    private void notifyConnectionCreationResult(ConnectionCreationCallback listener, boolean ret) {
+    private void notifyConnectionCreationResult(Connection connection, ConnectionCreationCallback listener, boolean ret) {
+        Log.d(TAG, "notifyConnectionCreationResult listener:" + listener + ", ret:" + ret);
         if (listener == null) {
             return;
         }
 
-        mThreadHandler.removeMessages(EVENT_CONNECTION_CREATION_TIMEOUT, listener);
+        if (connection != null) {
+            mThreadHandler.removeMessages(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
+        }
 
         listener.onResult(ret);
-
     }
 
-    private void handleConnectionCreationTimeout(ConnectionCreationCallback listener) {
-        notifyConnectionCreationResult(listener, false);
+    private void handleConnectionCreationTimeout(Connection connection) {
+        Log.d(TAG, "handleConnectionCreationTimeout!");
+
+        if (connection != null) {
+            connection.close(Connection.CONNECTION_REASON_CODE_CONNECT_TIMEOUT);
+        }
     }
 
     private HostConnection.HostConnectionListener mHostListener =
             new HostConnection.HostConnectionListener() {
                 @Override
                 public void onConnectionConnected(HostConnection host, Connection connection) {
-                    if (connection != null) {
-                        addConnection(connection);
-                    }
+                    mThreadHandler.obtainMessage(EVENT_CONNECTION_ADDED, connection).sendToTarget();
                 }
 
                 @Override
                 public void onHostClosed(HostConnection host, int errorCode) {
-                    if (host != null) {
-                        synchronized (mHostConnList) {
-                            mHostConnList.remove(host);
-                        }
-                    }
-
-                    // TODO: notify to UI
+                    mThreadHandler
+                            .obtainMessage(EVENT_HOSTCONNECTION_CLOSED, errorCode, 0, host)
+                            .sendToTarget();
                 }
             };
+
+    private void handleHostConnectionClosed(HostConnection host, int errorCode) {
+        if (host != null) {
+            synchronized (mHostConnList) {
+                mHostConnList.remove(host);
+            }
+        }
+
+        // TODO: notify to UI
+    }
 
     public void listen(int port) {
         mStopped = false;
@@ -885,7 +922,9 @@ public class ConnectionManager {
         }
 
         final HostConnection hostConnection =
-                ConnectionFactory.createHostConnection(port, mHostListener);
+                ConnectionFactory.createHostConnection(port,
+                        generateNetworkWakeLock("host:" + SystemClock.elapsedRealtime()),
+                        mHostListener);
 
         if (hostConnection != null) {
             synchronized (mHostConnList) {
@@ -937,8 +976,33 @@ public class ConnectionManager {
 
             @Override
             public void onConnectionConnected(Connection connection) {
-                addConnection(connection);
+                handleConnectionAdded(connection);
             }
         });
+    }
+
+    private PowerManager.WakeLock generateNetworkWakeLock(String id) {
+        PowerManager pm = (PowerManager)mContext.getSystemService(
+                Context.POWER_SERVICE);
+        return pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "connection:" + id);
+    }
+
+    private void logConnectionList() {
+        StringBuilder builder = new StringBuilder();
+
+        synchronized (mConnections) {
+            if (mConnections.size() > 0) {
+                builder.append("mConnections, connection count:" + mConnections.size() + "\n");
+                for (Connection connection : mConnections.values()) {
+                    builder.append("id:" + connection.getId() + ", ip:" + connection.getIp() + "\n");
+                }
+            } else {
+                builder.append("mConnections: no connections existed!");
+            }
+        }
+
+        Log.d(TAG, builder.toString());
     }
 }

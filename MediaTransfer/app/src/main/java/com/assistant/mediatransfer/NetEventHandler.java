@@ -121,6 +121,7 @@ public class NetEventHandler extends NetEventHandlerBase {
                 ChatMessageEvent event = Event.toEvent(eventHead.jsonData, ChatMessageEvent.class);
 
                 if (event != null) {
+                    event.setConnId(connId);
                     event.setIsReceived(true);
                     event.setEventCreateTime(System.currentTimeMillis());
 

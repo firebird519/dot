@@ -30,10 +30,17 @@ public abstract class Event {
     @Expose(serialize = false)
     public int mState;
 
+    // indicate event shown to user or not.
+    @Expose(serialize = false)
+    public boolean isShown = false;
+
+    @Expose(serialize = false)
     public int connId; // necessary?
+
     public long uniqueId = SystemClock.elapsedRealtime();
     public long time;
 
+    @Expose(serialize = false)
     public boolean isReceived; // if it's true, means it send myself.
 
     public Event(int connectionId, long lTime) {
@@ -60,6 +67,10 @@ public abstract class Event {
 
     public static <T> T toEvent(String jsonString,  Class<T> cls) {
         return sGson.fromJson(jsonString, cls);
+    }
+
+    public void setConnId(int id) {
+        connId = id;
     }
 
     public void setState(int state) {

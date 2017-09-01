@@ -59,7 +59,7 @@ public class ChatFragment extends Fragment {
     private ConnectionManager mConnectionManager;
 
     private ClientInfo mConnClientInfo;
-    List<Event> mChatMessageList;
+    private List<Event> mChatMessageList;
 
     //2 mins, and 10s for test mode
     private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG ? 10*1000 : 2*60*1000;
@@ -278,6 +278,8 @@ public class ChatFragment extends Fragment {
 
             Event event = getItem(position);
             if (event != null) {
+                event.isShown = true;
+
                 long prevMsgTime = prevEvent != null ? prevEvent.time : 0L;
 
                 Log.d(this, "prevMsgTime:" + prevMsgTime + ", cur event time:" + event.time);
@@ -305,7 +307,6 @@ public class ChatFragment extends Fragment {
                     viewHolder.textMsgLeft.setVisibility(View.GONE);
                 }
 
-
                 if (event.mState == Event.STATE_TIMEOUT
                         || event.mState == Event.STATE_FAILED) {
                     viewHolder.statusTextView.setText(R.string.chat_send_failed);
@@ -320,6 +321,10 @@ public class ChatFragment extends Fragment {
 
                 // attention dirty data display in textview
                 convertView.setVisibility(View.GONE);
+            }
+
+            if (position == (getCount() - 1)) {
+                mChattingListView.setSelection(position);
             }
 
 

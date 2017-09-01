@@ -23,6 +23,7 @@ import android.widget.Toast;
 import com.assistant.connection.ConnectionCreationCallback;
 import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.mediatransfer.NetworkInfoManager;
 import com.assistant.ui.fragment.AlertDialogFragment;
 import com.assistant.ui.fragment.ClientListFragment;
 
@@ -60,9 +61,8 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
             switch (msg.what) {
                 case EVENT_IP_CONNECT_RESULT:
                     int strId = (msg.arg1 == 1) ? R.string.ip_connect_success : R.string.ip_connect_failed;
-                    showToastMessage(getApplicationContext().getString(strId, (String)msg.obj));
-
                     stopProgressBar();
+                    showToastMessage(getApplicationContext().getString(strId, (String)msg.obj));
                     break;
                 default:
                     break;
@@ -160,6 +160,9 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         portEditText.setText(String.valueOf(mMediaTransferManager.getPort()));
 
         EditText ipEditText = (EditText)view.findViewById(R.id.ip_address_input_edittext);
+        NetworkInfoManager networkInfoManager = NetworkInfoManager.getInstance(this);
+        String ip = networkInfoManager.getWifiIpAddressString();
+        ipEditText.setText(ip);
         ipEditText.setFilters(new InputFilter[] {
                 new InputFilter() {
                     @Override
@@ -195,6 +198,8 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
 
         @Override
         public void onResult(boolean ret) {
+            Log.d(this, "onResult:" + ret);
+
             Message msg = mHandler.obtainMessage(EVENT_IP_CONNECT_RESULT, ret ? 1 : 0, 0);
             msg.obj = ip;
 
@@ -203,6 +208,7 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
     }
 
     private void handleIpInput(View view) {
+
         EditText ipEditText = (EditText)view.findViewById(R.id.ip_address_input_edittext);
         EditText portEditText = (EditText)view.findViewById(R.id.port_input_edittext);
 
@@ -211,6 +217,8 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
 
             String ip = ipEditText.getText().toString();
             String port = portEditText.getText().toString();
+            Log.d(this, "handleIpInput, ip:" + ip);
+
             if (!TextUtils.isEmpty(ip) && !TextUtils.isEmpty(port)) {
                 mMediaTransferManager.connectTo(ip, Integer.valueOf(port),new ConnectionCreationListener(ip));
             } else {
@@ -239,6 +247,7 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
     }
 
     private void showToastMessage(String msg) {
+        Log.d(this, "msg:" + msg);
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 

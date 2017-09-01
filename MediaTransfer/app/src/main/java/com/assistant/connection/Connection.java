@@ -5,6 +5,8 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.os.NetworkOnMainThreadException;
+import android.os.PowerManager;
+import android.text.TextUtils;
 
 import com.assistant.utils.Log;
 import com.assistant.utils.ThreadPool;
@@ -13,6 +15,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -34,7 +37,7 @@ import javax.net.SocketFactory;
  */
 
 public class Connection {
-    private static final String TAG = "Connection";
+    private String TAG = "Connection";
 
     public interface ConnectionListener {
         void onConnected(Connection connection);
@@ -60,6 +63,7 @@ public class Connection {
     public static final int CONNECTION_REASON_CODE_NOT_CONNECTED = -4;
     public static final int CONNECTION_REASON_CODE_SOCKET_RECEIVING= -5;
     public static final int CONNECTION_REASON_CODE_IP_ALREADY_CONNECTED = -6;
+    public static final int CONNECTION_REASON_CODE_CONNECT_TIMEOUT = -7;
 
     private int mLastReasonCode;
 
@@ -73,6 +77,9 @@ public class Connection {
      */
     private int mState;
     private Object mConnData = null;
+    private String mIpAddress;
+
+    private int mToBeClosedReason = 100;
 
     private int mId = -1;
 
@@ -83,11 +90,32 @@ public class Connection {
 
     private ThreadPool mThreadPool;
 
-    private static final int EVENT_HEART_BEAT = 0;
-
     private static final int HEART_BEAT_TIMESTAMP = 5*60*1000; //5 min
 
     private Handler mThreadHandler;
+    private PowerManager.WakeLock mSendWakeLock;
+    private PowerManager.WakeLock mReceiveWakeLock;
+    private static final long RECEIVE_WAKE_LOCK_TIMESTAMP = 1000; //2s
+
+    private class ThreadHandler extends Handler {
+        static final int EVENT_HEART_BEAT = 0;
+
+        ThreadHandler(Looper looper) {
+            super(looper);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case EVENT_HEART_BEAT:
+                    heartBeat();
+                    break;
+                default:
+                    break;
+            }
+            super.handleMessage(msg);
+        }
+    }
 
     public Connection(Socket socket, boolean isHost) {
         mSocket = socket;
@@ -108,18 +136,7 @@ public class Connection {
 
         HandlerThread thread = new HandlerThread("connectionHandlerThread");
         thread.start();
-        mThreadHandler = new Handler(thread.getLooper()) {
-            @Override
-            public void handleMessage(Message msg) {
-                switch (msg.what) {
-                    case EVENT_HEART_BEAT:
-                        heartBeat();
-                    default:
-                        break;
-                }
-                super.handleMessage(msg);
-            }
-        };
+        mThreadHandler = new ThreadHandler(thread.getLooper());
     }
 
     public int getState() {
@@ -127,14 +144,22 @@ public class Connection {
     }
 
     public String getIp() {
-        if (mSocket != null) {
-            return mSocket.getInetAddress().getHostAddress();
+        if (TextUtils.isEmpty(mIpAddress) && mSocket != null) {
+            mIpAddress = mSocket.getInetAddress().getHostAddress();
         }
-        return "";
+        return mIpAddress;
+    }
+
+    public void setWakeLock(PowerManager.WakeLock sendWakeLock,
+                            PowerManager.WakeLock receiveWakeLock) {
+        mSendWakeLock = sendWakeLock;
+        mReceiveWakeLock = receiveWakeLock;
     }
 
     public void setId(final int id) {
         mId = id;
+
+        TAG = TAG + ":" + id;
 
         Log.d(TAG, "id:" + id + ", ip:" + getIp());
     }
@@ -156,7 +181,14 @@ public class Connection {
         return mConnData;
     }
 
+    private void setState(int state) {
+        Log.d(TAG, "setState, state:" + state + ", pre state:" + mState);
+        mState = state;
+    }
+
     public void connect(final String ip, final int port) {
+        setState(Connection.CONNECTION_STATE_CONNECTING);
+
         Log.d(TAG, "Connection connect ip:" + ip + ", port:" + port);
         mThreadPool.addTask(new Runnable() {
             @Override
@@ -174,6 +206,10 @@ public class Connection {
      */
     // TODO: consider how to handle sending in progress when calling this...
     public synchronized int send(final byte[] data, final long size) {
+        if (!mSendWakeLock.isHeld()) {
+            mSendWakeLock.acquire();
+        }
+
         if (Looper.myLooper() == Looper.getMainLooper()) {
             throw new NetworkOnMainThreadException();
         }
@@ -244,6 +280,10 @@ public class Connection {
             closeInteranl(mToBeClosedReason);
         }
 
+        if (mSendWakeLock.isHeld()) {
+            mSendWakeLock.release();
+        }
+
         return sentCount;
     }
 
@@ -281,10 +321,28 @@ public class Connection {
 
         while (true) {
             if (mSocketInputStream == null) {
+                try {
+                    Log.d(TAG, "receive, create new stream for socket data receiving!");
+                    mSocketInputStream = new DataInputStream(mSocket.getInputStream());
+                    mIsDataReceiving = true;
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+
+                    closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
+
+                    break;
+                }
+            }
+
+            if (mSocketInputStream == null) {
                 break;
             }
+
             try {
-                receivedEverytime = mSocketInputStream.read(buf, receivedCount, (int)bufSize - receivedCount);
+                receivedEverytime = mSocketInputStream.read(buf, receivedCount, (int) bufSize - receivedCount);
+                if (!mReceiveWakeLock.isHeld()) {
+                    mReceiveWakeLock.acquire(RECEIVE_WAKE_LOCK_TIMESTAMP);
+                }
             } catch (IOException e) {
                 e.printStackTrace();
 
@@ -294,13 +352,35 @@ public class Connection {
                 return CONNECTION_REASON_CODE_IO_EXCEPTION;
             }
 
-            receivedCount += receivedEverytime;
+            Log.d(TAG, "receive, stream read count:" + receivedEverytime);
+            if (receivedEverytime > 0) {
+                receivedCount += receivedEverytime;
 
-            // TODO: log received data details for debug
-            if (size == receivedCount || (receivedCount == bufSize) || isValidReason(mToBeClosedReason)) {
-                mIsDataReceiving = false;
+                if (size == receivedCount
+                        || (receivedCount == bufSize)
+                        || isValidReason(mToBeClosedReason)) {
+                    Log.d(TAG, "receive, size:" + size +
+                            ", bufSize:" + bufSize +
+                            ", receivedCount:" + receivedCount);
 
-                break;
+                    mIsDataReceiving = false;
+
+                    break;
+                }
+            } else if (receivedEverytime < 0) {
+                closeSocketInputStream();
+
+                try {
+                    Thread.sleep(200);
+                }catch (InterruptedException e) {
+
+                }
+            } else if (receivedEverytime == 0) {
+                try {
+                    Thread.sleep(200);
+                }catch (InterruptedException e) {
+
+                }
             }
         }
 
@@ -311,36 +391,66 @@ public class Connection {
         }
 
         // ignore previous heart beat event which only needed if there is no data traffic.
-        startHeartBeat();
+        if (receivedCount > 0) {
+            startHeartBeat();
+        }
+
+        Log.d(TAG, "receive, receivedCount:" + receivedCount);
 
         return receivedCount;
     }
 
     private synchronized void createSocketAndNotify(String ip, int port) {
+        int reason = 0;
+        Log.d(TAG, "createSocketAndNotify, ip:" + ip + ", port:" + port);
+
         try {
             mSocket = SocketFactory.getDefault().createSocket(ip, port);
         } catch (UnknownHostException e) {
+            Log.d(TAG, "createSocketAndNotify, failed:" + e.getMessage());
             e.printStackTrace();
-            notifyConnectFailed(CONNECTION_REASON_CODE_UNKNOWN_HOST);
+            reason = CONNECTION_REASON_CODE_UNKNOWN_HOST;
+            notifyConnectFailed(reason);
         } catch (IOException e) {
-            e.printStackTrace();
-            notifyConnectFailed(CONNECTION_REASON_CODE_IO_EXCEPTION);
+            Log.d(TAG, "createSocketAndNotify, failed:" + e.getMessage());
+            reason = CONNECTION_REASON_CODE_IO_EXCEPTION;
+            notifyConnectFailed(reason);
         }
 
-        Log.d(TAG, "createSocketAndNotify, ip:" + ip + ", socket:" + mSocket);
+        Log.d(TAG, "createSocketAndNotify, mState:" + mState + ", mSocket:" + mSocket);
+
+        if (mState != CONNECTION_STATE_CONNECTING
+                && mState != CONNECTION_STATE_CONNECTED) {
+            if (mSocket != null && !mSocket.isClosed()) {
+                try {
+                    mSocket.close();
+                } catch (IOException ioe) {
+                    ioe.printStackTrace();
+                }
+            }
+
+            setState(CONNECTION_STATE_NOT_CONNECTED);
+            mSocket = null;
+        }
 
         if (mSocket != null) {
-            mState = CONNECTION_STATE_CONNECTED;
+            try {
+                mSocket.setKeepAlive(true);
+            } catch (SocketException e) {
+                Log.d(TAG, "createSocketAndNotify, setKeepAlive exception:" + e.getMessage());
+            }
+            setState(CONNECTION_STATE_CONNECTED);
 
             initSocketSteam();
 
             notifyConnected();
+        } else {
+            closeInteranl(reason);
         }
     }
 
     private void initSocketSteam() {
         try {
-            mSocketInputStream = new DataInputStream(mSocket.getInputStream());
             mSocketOutputStream = new DataOutputStream(mSocket.getOutputStream());
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -350,15 +460,15 @@ public class Connection {
     }
 
     public void startHeartBeat() {
-        mThreadHandler.removeMessages(EVENT_HEART_BEAT);
-        mThreadHandler.sendEmptyMessageDelayed(EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
+        mThreadHandler.removeMessages(ThreadHandler.EVENT_HEART_BEAT);
+        mThreadHandler.sendEmptyMessageDelayed(ThreadHandler.EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
     }
 
     private void heartBeat() {
         sendUrgentData();
 
         if (mState == CONNECTION_STATE_CONNECTED) {
-            mThreadHandler.sendEmptyMessageDelayed(EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
+            mThreadHandler.sendEmptyMessageDelayed(ThreadHandler.EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
         }
     }
     /*
@@ -430,7 +540,6 @@ public class Connection {
         return reason <= 0;
     }
 
-    private int mToBeClosedReason = 100;
     private void closeInteranl(int reason) {
         if (!mIsDataSending) {
             closeSocket(reason);
@@ -470,24 +579,25 @@ public class Connection {
         }
     }
 
+
     public void removeListener(ConnectionListener listener) {
         mListeners.remove(listener);
     }
 
     private void notifyConnected() {
-        for(ConnectionListener listener : mListeners) {
+        for (ConnectionListener listener : mListeners) {
             listener.onConnected(this);
         }
     }
 
     private void notifyConnectFailed(int reason) {
-        for(ConnectionListener listener : mListeners) {
+        for (ConnectionListener listener : mListeners) {
             listener.onConnectFailed(this, reason);
         }
     }
 
     private void notifyClosed(int reason) {
-        for(ConnectionListener listener : mListeners) {
+        for (ConnectionListener listener : mListeners) {
             listener.onClosed(this, reason);
         }
     }

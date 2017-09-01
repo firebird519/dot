@@ -2,6 +2,9 @@ package com.assistant.connection;
 
 import android.os.Handler;
 import android.os.Message;
+import android.os.PowerManager;
+
+import com.assistant.utils.Log;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -14,6 +17,8 @@ import java.util.concurrent.CopyOnWriteArraySet;
  */
 
 public class HostConnection {
+    private static String TAG = "HostConnection";
+
     public static final int HOST_CONNECTION_ERROR_CODE_CLOSED_MANUAL = 0;
     public static final int HOST_CONNECTION_ERROR_CODE_CLOSED_IOERROR = 1;
 
@@ -28,6 +33,8 @@ public class HostConnection {
             new CopyOnWriteArraySet<>();
 
     private ServerSocket mServerSocket;
+
+    private PowerManager.WakeLock mWakeLock;
 
     private static final int EVENT_SOCKET_CONNECTED = 0;
     private static final int EVENT_HOSTSOCKET_CLOSED = 1;
@@ -57,7 +64,7 @@ public class HostConnection {
         return mPort;
     }
 
-    public int listen(int port, HostConnectionListener listener) {
+    public int listen(int port, PowerManager.WakeLock wakeLock, HostConnectionListener listener) {
         if (port <= 0 || listener == null) {
             return -1;
         }
@@ -66,7 +73,10 @@ public class HostConnection {
             return -1;
         }
 
+        TAG = TAG + ":" + port;
+
         mPort = port;
+        mWakeLock = wakeLock;
 
         try {
             mServerSocket = new ServerSocket(port);
@@ -80,7 +90,7 @@ public class HostConnection {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                Socket socket;
+                Socket socket = null;
 
                 while (true) {
                     if (mServerSocket == null && mServerSocket.isClosed()) {
@@ -89,6 +99,11 @@ public class HostConnection {
 
                     try {
                         socket = mServerSocket.accept();
+                        if (!mWakeLock.isHeld()) {
+                            mWakeLock.acquire(2000);
+                        }
+
+                        socket.setKeepAlive(true);
                     } catch (IOException ioe) {
                         ioe.printStackTrace();
 
@@ -99,11 +114,14 @@ public class HostConnection {
                         }
 
                         break;
+                    } catch (Exception e) {
+                        Log.d(TAG, "listen, exception:" + e.getMessage());
                     }
 
                     if (socket != null) {
-                        mHandler.obtainMessage(EVENT_SOCKET_CONNECTED, new Connection(socket, true)).
-                                sendToTarget();
+                        mHandler.obtainMessage(EVENT_SOCKET_CONNECTED,
+                                        new Connection(socket, true))
+                                .sendToTarget();
                     }
                 }
             }

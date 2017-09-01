@@ -107,6 +107,7 @@ public class MediaTransferManager {
 
             @Override
             public void onEventReceived(int connId, Event event) {
+                Log.d(this, "onEventReceived:" + event);
                 notifyEventReceived(connId, event);
             }
 

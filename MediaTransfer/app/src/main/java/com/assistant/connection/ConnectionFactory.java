@@ -1,5 +1,7 @@
 package com.assistant.connection;
 
+import android.os.PowerManager;
+
 import com.assistant.utils.Log;
 
 import java.io.IOException;
@@ -15,9 +17,11 @@ import javax.net.SocketFactory;
 public class ConnectionFactory {
     private static final String TAG = "ConnectionFactory";
 
-    public static HostConnection createHostConnection(int port, HostConnection.HostConnectionListener listener) {
+    public static HostConnection createHostConnection(int port,
+                                                      PowerManager.WakeLock wakeLock,
+                                                      HostConnection.HostConnectionListener listener) {
         HostConnection host  = new HostConnection();
-        if (0 != host.listen(port, listener)) {
+        if (0 != host.listen(port, wakeLock, listener)) {
             // some error happened. null will be returned!
             return null;
         }
@@ -45,15 +49,17 @@ public class ConnectionFactory {
         try {
             Log.d(TAG, "createSocket:" + ip + ", port:" + port);
             socket = SocketFactory.getDefault().createSocket(ip, port);
+
+            socket.setKeepAlive(true);
         } catch (UnknownHostException e) {
             //e.printStackTrace();
             Log.d(TAG, "UnknownHost for ip:" + ip);
         } catch (IOException e) {
-            Log.d(TAG, "UnknownHost, io exception for ip:" + ip);
+            Log.d(TAG, "IOException, io exception for ip:" + ip);
             //e.printStackTrace();
         } catch (Exception e) {
             //e.printStackTrace();
-            Log.d(TAG, "UnknownHost, exception for ip:" + ip);
+            Log.d(TAG, "Exception, exception for ip:" + ip + ", msg:" + e.getMessage());
         }
 
         return socket;
