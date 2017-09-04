@@ -8,14 +8,13 @@ import android.graphics.Paint;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 
+import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
 import com.assistant.R;
-
 
 public class CircleIndicatorView extends View {
     private static final String TAG = "CircleIndicatorView";
@@ -78,7 +77,7 @@ public class CircleIndicatorView extends View {
         mTextPaint.setColor(mTextColor);
         mTextPaint.setTextSize(mTextSize);
 
-        if (Utils.DEBUG) {
+        if (Utils.DEBUG_CONNECTION) {
             setText("1");
         }
     }

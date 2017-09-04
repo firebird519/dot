@@ -1,5 +1,6 @@
 package com.assistant.ui;
 
+import android.Manifest;
 import android.app.DialogFragment;
 import android.app.FragmentManager;
 import android.app.ProgressDialog;
@@ -29,6 +30,8 @@ import com.assistant.ui.fragment.ClientListFragment;
 
 
 import com.assistant.R;
+import com.assistant.ui.permissiongrant.PermissionsActivity;
+import com.assistant.ui.permissiongrant.PermissionsChecker;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
@@ -96,6 +99,23 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         FragmentManager fragmentManager = getFragmentManager();
         fragmentManager.beginTransaction().replace(R.id.content_frame, fragment).commit();
         // update selected item and title, then close the drawer
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // permission grant
+        if (mPermissionsChecker == null) {
+            mPermissionsChecker = new PermissionsChecker(this);
+        }
+
+        // permission grant
+        if (mPermissionsChecker.lacksPermissions(PERMISSIONS)) {
+            startPermissionsActivity();
+        } else {
+            Log.setLogPath(Log.getFilePath(this) + "/assistant_logs");
+        }
     }
 
     @Override
@@ -401,4 +421,30 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         mDrawerToggle.onConfigurationChanged(newConfig);
     }*/
 
+    // permission variable
+    private PermissionsChecker mPermissionsChecker; // 权限检测器
+
+    private static final int PERMISSION_REQUEST_CODE = 0; // 请求码
+
+    // 所需的全部权限
+    static final String[] PERMISSIONS = new String[] {
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+    };
+
+    private void startPermissionsActivity() {
+        PermissionsActivity.startActivityForResult(this, PERMISSION_REQUEST_CODE, PERMISSIONS);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // finish application if no permission granted.
+        if (requestCode == PERMISSION_REQUEST_CODE && resultCode == PermissionsActivity.PERMISSIONS_DENIED) {
+            finish();
+            return;
+        }
+
+        Log.setLogPath(Log.getFilePath(this) + "/assistant_logs");
+    }
 }

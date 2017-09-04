@@ -352,7 +352,7 @@ public class Connection {
                 return CONNECTION_REASON_CODE_IO_EXCEPTION;
             }
 
-            Log.d(TAG, "receive, stream read count:" + receivedEverytime);
+            Log.d(TAG, "receive, stream read receivedEverytime:" + receivedEverytime);
             if (receivedEverytime > 0) {
                 receivedCount += receivedEverytime;
 

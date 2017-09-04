@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.BatteryManager;
 import android.os.storage.StorageManager;
-import android.util.Log;
 
 import java.io.File;
 import java.util.regex.Matcher;
@@ -14,6 +13,7 @@ import java.util.regex.Pattern;
 public class Utils {
     //TODO: change to false for official release.
     public static final boolean DEBUG = true;
+    public static final boolean DEBUG_CONNECTION = true;
 
     public static final String DCIM = "DCIM";
 

@@ -8,10 +8,6 @@ import android.view.MenuItem;
 import com.assistant.R;
 import com.assistant.utils.Log;
 
-/**
- * Created by liyong on 17-8-16.
- */
-
 public class ChattingActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {

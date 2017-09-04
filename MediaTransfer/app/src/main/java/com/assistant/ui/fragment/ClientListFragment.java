@@ -34,10 +34,8 @@ import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Created by liyong on 17-8-17.
@@ -57,13 +55,12 @@ public class ClientListFragment extends Fragment {
 
     private SharePreferencesHelper mSharePreferencesHelper;
 
-    private Map<Integer, ClientInfoItem> mClintInfos =
-            Collections.synchronizedMap(new HashMap<Integer, ClientInfoItem>(10));
-
     private Activity mActivity;
 
     private static final int EVENT_CANCEL_INDICATION = 0;
     private static final int EVENT_CONNECTION_LIST_UPDATED = 1;
+    private static final int EVENT_CONNECTION_AVAILABLE = 2;
+    private static final int EVENT_CONNECTION_REMOVED = 3;
     private Handler mHandler = new Handler(Looper.getMainLooper()) {
         @Override
         public void handleMessage(Message msg) {
@@ -71,9 +68,12 @@ public class ClientListFragment extends Fragment {
                 case EVENT_CANCEL_INDICATION:
                     hideIndicatorText();
                     break;
+                case EVENT_CONNECTION_AVAILABLE:
                 case EVENT_CONNECTION_LIST_UPDATED:
-                    updateClientInfoItems();
+                    mClientListAdapter.updateClientInfo();
                     break;
+                case EVENT_CONNECTION_REMOVED:
+                    mClientListAdapter.removeClient(msg.arg1);
                 default:
                     break;
             }
@@ -95,10 +95,8 @@ public class ClientListFragment extends Fragment {
         mIndicatorTextView = (TextView)view.findViewById(R.id.indicator_text);
 
         mClientListAdapter = new ClientListAdapter();
-
-        mClientListAdapter.mConnIds = mMediaTransferManager.getConnectionIds();
-
         mListView.setAdapter(mClientListAdapter);
+        mClientListAdapter.updateClientInfo();
 
         mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
@@ -143,23 +141,25 @@ public class ClientListFragment extends Fragment {
         mMediaTransferManager.addListener(new MediaTransferManager.MediaTransferListener() {
             @Override
             public void onClientAvailable(int id, ClientInfo info) {
-                mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
+                mHandler.sendEmptyMessage(EVENT_CONNECTION_AVAILABLE);
             }
 
             @Override
             public void onClientDisconnected(int id, int reason) {
-                mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
+                mHandler.obtainMessage(EVENT_CONNECTION_REMOVED, id, reason).sendToTarget();
             }
 
             @Override
             public void onMessageReceived(int clientId, Event event) {
                 Log.d(this, "onEventReceived:" + event);
+                mHandler.removeMessages(EVENT_CONNECTION_LIST_UPDATED);
                 mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
             }
 
             @Override
             public void onMessageSendResult(int clientId, int msgId, boolean isSuccess) {
-
+                mHandler.removeMessages(EVENT_CONNECTION_LIST_UPDATED);
+                mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
             }
         });
     }
@@ -175,16 +175,20 @@ public class ClientListFragment extends Fragment {
                         @Override
                         public void onSearchCompleted() {
                             Log.d(this, "onSearchCompleted");
+                            mHandler.removeMessages(EVENT_CANCEL_INDICATION);
                             mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
                         }
 
                         @Override
                         public void onSearchCanceled(int reason) {
                             Log.d(this, "onSearchCanceled");
+                            mHandler.removeMessages(EVENT_CANCEL_INDICATION);
                             mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
                         }
                     });
         }
+
+        mClientListAdapter.updateClientInfo();
 
         super.onResume();
     }
@@ -206,54 +210,12 @@ public class ClientListFragment extends Fragment {
         mIndicatorTextView.setVisibility(View.INVISIBLE);
     }
 
-    private void updateClientInfoItems() {
-        Integer[] connIds = mMediaTransferManager.getConnectionIds();
-
-        if (connIds == null || connIds.length == 0) {
-            mClintInfos.clear();
-        } else {
-            for (Integer id : connIds) {
-                ClientInfoItem item = mClintInfos.get(id);
-
-                if (item == null) {
-                    item = new ClientInfoItem();
-                }
-
-                item.id = id;
-                item.unreadMsgCount = 0;
-                // TODO:
-                item.lastMsg = "No messages";
-
-                List<Event> msgList = mMediaTransferManager.getMessageList(id);
-
-                if (msgList != null && msgList.size() > 0) {
-                    int count = 0;
-                    for (Event event : msgList) {
-                        if (!event.isShown) {
-                            count++;
-                        }
-                    }
-
-                    item.unreadMsgCount = count;
-
-                    Event event = msgList.get(msgList.size() - 1);
-
-                    if (event.getEventType() == Event.EVENT_TYPE_CHAT) {
-                        item.lastMsg = ((ChatMessageEvent) event).message;
-                    }
-                }
-            }
-        }
-
-        mClientListAdapter.notifyDataSetChanged();
-    }
 
     class ClientListAdapter extends BaseAdapter {
         Integer[] mConnIds = null;
 
-        void setConnIds(Integer[] connIds) {
-            mConnIds = connIds;
-        }
+        private Map<Integer, ClientInfoItem> mClintInfos =
+                Collections.synchronizedMap(new HashMap<Integer, ClientInfoItem>(10));
 
         @Override
         public int getCount() {
@@ -275,8 +237,6 @@ public class ClientListFragment extends Fragment {
             return conn;
         }
 
-
-
         @Override
         public long getItemId(int position) {
             int id = -1;
@@ -285,6 +245,41 @@ public class ClientListFragment extends Fragment {
             }
 
             return id;
+        }
+
+        public void removeClient(int connId) {
+            synchronized (mClintInfos) {
+                mClintInfos.remove(connId);
+
+                updateClientInfo();
+            }
+        }
+
+        public void updateClientInfo() {
+            synchronized (mClintInfos) {
+                if (mMediaTransferManager == null) {
+                    return;
+                }
+
+                mConnIds = mMediaTransferManager.getConnectionIds();
+
+                if (mConnIds == null || mConnIds.length == 0) {
+                    mClintInfos.clear();
+                } else {
+                    for (Integer id : mConnIds) {
+                        ClientInfoItem item = mClintInfos.get(id);
+
+                        if (item == null) {
+                            item = new ClientInfoItem(id, mMediaTransferManager.getMessageList(id));
+                            mClintInfos.put(id, item);
+                        }
+
+                        item.updateClientItemInfo();
+                    }
+                }
+
+                notifyDataSetChanged();
+            }
         }
 
         @Override
@@ -311,27 +306,31 @@ public class ClientListFragment extends Fragment {
                 } else {
                     name = conn.getIp();
                 }
+            } else {
+                Log.d(this, "Connection not found for position:" + position);
+                return null;
             }
 
             holder.clientNameView.setText(name);
-
 
             SimpleDateFormat formatter = new SimpleDateFormat("MM月dd日 HH:mm:ss");
             Date curDate = new Date(System.currentTimeMillis());//获取当前时间
             String str = formatter.format(curDate);
 
-            holder.lastMsgTimeView.setText(str);
+            synchronized (mClintInfos) {
+                ClientInfoItem item = mClintInfos.get(conn.getId());
+                if (item != null) {
+                    holder.lastMsgTimeView.setText(str);
 
-            holder.lastMsgSummaryView.setText("message summary");
+                    holder.lastMsgSummaryView.setText(item.lastMsg);
 
-            // TODO:
-            int unreadMsgCount = 0;// getUnreadMsgCount(position);
-
-            if (unreadMsgCount > 0) {
-                holder.circleIndicatorView.setText(String.valueOf(unreadMsgCount));
-                holder.circleIndicatorView.setVisibility(View.VISIBLE);
-            } else {
-                holder.circleIndicatorView.setVisibility(View.GONE);
+                    if (item.unreadMsgCount > 0) {
+                        holder.circleIndicatorView.setText(String.valueOf(item.unreadMsgCount));
+                        holder.circleIndicatorView.setVisibility(View.VISIBLE);
+                    } else {
+                        holder.circleIndicatorView.setVisibility(View.GONE);
+                    }
+                }
             }
 
             return view;
@@ -339,9 +338,44 @@ public class ClientListFragment extends Fragment {
     }
 
     class ClientInfoItem {
-        int id;
+        int connId;
         int unreadMsgCount;
         String lastMsg;
+
+        List<Event> msgList;
+
+        public ClientInfoItem(int id, List<Event> list) {
+            connId = id;
+            msgList = list;
+
+            unreadMsgCount = getUnreadMsgCount();
+        }
+
+        public int getUnreadMsgCount() {
+            int count = 0;
+            if (msgList != null && msgList.size() > 0) {
+                for (Event event : msgList) {
+                    if (!event.isShown) {
+                        count++;
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        public void updateClientItemInfo() {
+            unreadMsgCount = getUnreadMsgCount();
+
+            if (msgList == null || msgList.size() == 0) {
+                lastMsg = mActivity.getResources().getString(R.string.no_messages);
+            } else {
+                Event event = msgList.get(msgList.size() - 1);
+                if (event != null) {
+                    lastMsg = ((ChatMessageEvent)event).message;
+                }
+            }
+        }
     }
 
     static class ViewHolder {

@@ -9,15 +9,17 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <application
+        android:name=".MediaTransferApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:persistent="true"
         >
         <activity android:name="com.assistant.ui.MainActivity"
             android:theme="@style/NoTitleBarTheme">
@@ -42,6 +44,23 @@
             android:theme="@style/CommonTheme">
 
         </activity>
+
+        <activity android:name=".ui.permissiongrant.PermissionsActivity"
+            android:theme="@style/CommonTheme"/>
+
+        <service android:name=".MediaTransferService">
+            <intent-filter android:priority="1000" >
+                <action android:name="com.assitant.mediatransferservice" />
+            </intent-filter>
+        </service>
+
+        <receiver android:name=".BootupReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.PACKAGE_RESTARTED" />
+                <action android:name="com.assistant.mediatransfer.startreceiver" />
+            </intent-filter>
+        </receiver>
 
     </application>
 </manifest>

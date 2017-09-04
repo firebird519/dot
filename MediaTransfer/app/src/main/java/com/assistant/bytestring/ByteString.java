@@ -1,6 +1,6 @@
 package com.assistant.bytestring;
 
-import android.util.Log;
+import com.assistant.utils.Log;
 
 /**
  * Created by alex on 17-8-6.

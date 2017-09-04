@@ -24,7 +24,6 @@ import com.assistant.connection.ConnectionManager;
 import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
-import com.assistant.events.EventHead;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.FileChooserActivity;
 import com.assistant.utils.Log;
@@ -62,7 +61,7 @@ public class ChatFragment extends Fragment {
     private List<Event> mChatMessageList;
 
     //2 mins, and 10s for test mode
-    private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG ? 10*1000 : 2*60*1000;
+    private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG_CONNECTION ? 10*1000 : 2*60*1000;
 
     private static final int EVENT_LIST_UPDATE = 0;
     private static final int EVENT_SCREEN_UPDATE = 1;

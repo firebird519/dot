@@ -1,7 +1,6 @@
 package com.assistant.connection;
 
 import android.content.Context;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -26,7 +25,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -185,7 +183,7 @@ public class ConnectionManager {
         synchronized (mConnections) {
             if (connection != null && !mConnections.containsValue(connection)) {
                 String ipAddress = connection.getIp();
-                if (isIpConnected(ipAddress) && !(Utils.DEBUG && mConnections.size() <= 2)) {
+                if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() <= 2)) {
                     Log.d(this, "handleConnectionAdded: ipAddress already connected!");
                     connection.close(Connection.CONNECTION_REASON_CODE_IP_ALREADY_CONNECTED);
 
@@ -678,6 +676,9 @@ public class ConnectionManager {
                     sep2 == ';') {
                 setState(RECEIVING_JSON);
             } else {
+                Log.d(TAG, "handleConnectionHeader, mHeaderBuf not right:"
+                        + mHeaderBuf.toString());
+
                 // some problems happened! close connection.
                 closeConnection();
             }
