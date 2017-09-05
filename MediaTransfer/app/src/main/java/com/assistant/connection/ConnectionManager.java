@@ -85,7 +85,8 @@ public class ConnectionManager {
 
         @Override
         public void onConnectFailed(Connection conn, int reasonCode) {
-            Log.d(TAG, "connection connected failed for ip:" + conn.getIp());
+            Log.d(TAG, "connection connected failed for ip:" + conn.getIp()
+                    + ", reason:" + reasonCode);
             mThreadHandler
                     .obtainMessage(EVENT_CONNECTION_CONNECT_FAILED, reasonCode, 0, conn)
                     .sendToTarget();
@@ -93,7 +94,8 @@ public class ConnectionManager {
 
         @Override
         public void onClosed(Connection conn, int reasonCode) {
-            Log.d(TAG, "connection closed for ip:" + conn.getIp() + ", id:" + conn.getId() + ", reason:" + reasonCode);
+            Log.d(TAG, "connection closed for ip:" + conn.getIp() + ", id:" + conn.getId()
+                    + ", reason:" + reasonCode);
 
             mThreadHandler
                     .obtainMessage(EVENT_CONNECTION_CLOSED, reasonCode, 0, conn)

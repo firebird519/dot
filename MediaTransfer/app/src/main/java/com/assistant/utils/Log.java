@@ -34,15 +34,20 @@ public class Log {
 
     private static Date sDate = new Date();
 
+    public static void init(Context context) {
+        setLogPath(Log.getFilePath(context) + "/assistant_logs");
+    }
     /**
      * This function should be called once when this application start. Otherwise logs will not
      * write to file.
      *
      * @param path
      */
-    public static void setLogPath(String path) {
+    private static void setLogPath(String path) {
         android.util.Log.d(TAG, "log path:" + path);
-        sLogPath = path; // getFilePath(context) + "/Logs";//获得文件储存路径,在后面加"/Logs"建立子文件夹
+        if (TextUtils.isEmpty(sLogPath)) {
+            sLogPath = path; // getFilePath(context) + "/Logs";//获得文件储存路径,在后面加"/Logs"建立子文件夹
+        }
     }
 
     public static void log(String tag, String msg) {

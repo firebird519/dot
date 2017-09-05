@@ -71,6 +71,7 @@ public class Connection {
     public static final int CONNECTION_STATE_CONNECTING = 1;
     public static final int CONNECTION_STATE_CONNECTED = 2;
     public static final int CONNECTION_STATE_CLOSE_MANUAL = 3;
+    public static final int CONNECTION_STATE_CLOSEED = 4;
 
     /*
      * indicate current connection state
@@ -270,7 +271,7 @@ public class Connection {
         } catch (Exception ioe) {
             ioe.printStackTrace();
 
-            closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
+            closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
         }
 
         mIsDataSending = false;
@@ -328,7 +329,7 @@ public class Connection {
                 } catch (IOException ex) {
                     ex.printStackTrace();
 
-                    closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
+                    closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
 
                     break;
                 }
@@ -346,7 +347,7 @@ public class Connection {
             } catch (IOException e) {
                 e.printStackTrace();
 
-                closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
+                closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
 
                 // end current thread if some exception happened!
                 return CONNECTION_REASON_CODE_IO_EXCEPTION;
@@ -391,7 +392,7 @@ public class Connection {
         }
 
         // ignore previous heart beat event which only needed if there is no data traffic.
-        if (receivedCount > 0) {
+        if (receivedCount == size) {
             startHeartBeat();
         }
 
@@ -455,7 +456,7 @@ public class Connection {
         } catch (IOException ex) {
             ex.printStackTrace();
 
-            closeSocket(CONNECTION_REASON_CODE_IO_EXCEPTION);
+            closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
         }
     }
 
@@ -541,6 +542,10 @@ public class Connection {
     }
 
     private void closeInteranl(int reason) {
+        if (mState == CONNECTION_STATE_CLOSEED) {
+            return;
+        }
+
         if (!mIsDataSending) {
             closeSocket(reason);
 
@@ -565,7 +570,7 @@ public class Connection {
             }
         }
 
-        mState = CONNECTION_STATE_NOT_CONNECTED;
+        setState(CONNECTION_STATE_CLOSEED);
         mSocket = null;
 
         notifyClosed(CONNECTION_REASON_CODE_IO_EXCEPTION);

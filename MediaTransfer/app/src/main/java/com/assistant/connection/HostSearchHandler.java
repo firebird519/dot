@@ -215,8 +215,10 @@ public class HostSearchHandler {
             return;
         }
 
+        String ipAddress = IPv4Utils.bytesToIp(ip);
+
         if (isFake) {
-            Log.d(TAG, "createConnectingTask, debug mode, not to connect to this ip really! just failed!");
+            Log.d(TAG, "createConnectingTask, debug mode, IP:" + ipAddress + " ignored!" );
             setByteIpMask(index, IP_MARK_CONNECT_FAILED);
 
             // search end. notify failed and do necessary clean
@@ -230,10 +232,8 @@ public class HostSearchHandler {
             return;
         }
 
-        String ipAddress = IPv4Utils.bytesToIp(ip);
-
         if (ConnectionManager.getInstance(mContext).isIpConnected(ipAddress)) {
-            Log.d(TAG, "ip:" + ipAddress + "already connected!");
+            Log.d(TAG, "ip:" + ipAddress + " already connected!");
             setByteIpMask(index, IP_MARK_CONNECTED);
             return;
         }

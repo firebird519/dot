@@ -4,18 +4,15 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
-/**
- * Created by liyong on 17-9-4.
- */
-
 public class BootupReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        startMediaTransferService(context);
-    }
 
-    void startMediaTransferService(Context context) {
-        Intent intent = new Intent(context, MediaTransferService.class);
-        context.startService(intent);
+        boolean startSearch = false;
+        if (intent.getAction().equals("com.assistant.mediatransfer.startreceiver")
+                || intent.getAction().equals(Intent.ACTION_PACKAGE_RESTARTED)) {
+            startSearch = true;
+        }
+        MediaTransferService.startService(context, startSearch);
     }
 }

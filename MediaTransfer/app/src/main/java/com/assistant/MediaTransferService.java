@@ -1,6 +1,5 @@
 package com.assistant;
 
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
@@ -10,16 +9,15 @@ import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
 
-import com.assistant.R;
+import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.MainActivity;
 
-
-/**
- * Created by alex on 17-8-17.
- */
-
 public class MediaTransferService extends Service {
+
+    private static final String NETWORK_SEARCH_EXTRA = "network_search";
+    private MediaTransferManager mMediaTransferManager;
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
@@ -29,22 +27,49 @@ public class MediaTransferService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-
-        MediaTransferManager mediaTransferManager =
-                MediaTransferManager.getInstance(getApplicationContext());
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        showNotification();
-
         flags = START_STICKY;
+
+        tryStartListenAndSearch(intent);
 
         return super.onStartCommand(intent, flags, startId);
     }
 
-    private void showNotification() {
-        NotificationCompat.Builder mBuilder =
+    private void tryStartListenAndSearch(Intent intent) {
+        SharePreferencesHelper sharePreferencesHelper
+                = SharePreferencesHelper.getInstance(getApplicationContext());
+
+        if ((intent != null && intent.getBooleanExtra(NETWORK_SEARCH_EXTRA, false))
+                && 1 == sharePreferencesHelper.getInt(
+                SharePreferencesHelper.SP_KEY_NETWORK_ON, 1)) {
+            mMediaTransferManager =
+                    MediaTransferManager.getInstance(getApplicationContext());
+
+            mMediaTransferManager.startListen();
+
+            mMediaTransferManager.startSearchHost(null);
+
+            // to keep service in foreground to avoid be killed.
+            // and don't start service when network is off.
+            showForegroundNotification();
+        }
+    }
+
+    /*
+     * This function is created as one util function to start self.
+     *
+     */
+    public static void startService(Context context, boolean startSearch) {
+        Intent intent = new Intent(context, MediaTransferService.class);
+        intent.putExtra(NETWORK_SEARCH_EXTRA, startSearch);
+        context.startService(intent);
+    }
+
+    private void showForegroundNotification() {
+        NotificationCompat.Builder builder =
                 new NotificationCompat.Builder(this)
                         .setSmallIcon(R.drawable.ic_launcher)
                         .setContentTitle(getResources().getString(R.string.app_name))
@@ -59,20 +84,19 @@ public class MediaTransferService extends Service {
                         0,
                         PendingIntent.FLAG_UPDATE_CURRENT
                 );
-        mBuilder.setContentIntent(resultPendingIntent);
-        NotificationManager mNotificationManager =
-                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        builder.setContentIntent(resultPendingIntent);
 
-        mNotificationManager.notify(0, mBuilder.build());
+        startForeground(0, builder.build());
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
 
-        stopForeground(true);
-
+        // send one receiver out and try to start process again.
         Intent intent = new Intent("com.assistant.mediatransfer.startreceiver");
         sendBroadcast(intent);
+
+        stopForeground(true);
     }
 }

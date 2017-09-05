@@ -1,24 +1,26 @@
 package com.assistant;
 
 import android.app.Application;
-import android.content.Intent;
+import android.os.SystemClock;
 
-import com.assistant.MediaTransferService;
-
-/**
- * Created by liyong on 17-9-4.
- */
+import com.assistant.ui.permissiongrant.PermissionHelper;
+import com.assistant.utils.Log;
 
 public class MediaTransferApplication extends Application {
+    PermissionHelper mPermissionHelper;
     @Override
     public void onCreate() {
         super.onCreate();
 
-        startMediaTransferService();
-    }
+        mPermissionHelper = new PermissionHelper(getApplicationContext());
+        if (mPermissionHelper.isWriteExternalStrogagePermissionGranted()) {
+            Log.init(getApplicationContext());
+        }
 
-    void startMediaTransferService() {
-        Intent intent = new Intent(this, MediaTransferService.class);
-        startService(intent);
+        Log.d(this, "onCreate time:" + SystemClock.elapsedRealtime());
+
+        MediaTransferService.startService(getApplicationContext(), true);
+
+        // TODO: to add monitor process/job schedule to keep this process keep alive?
     }
 }
