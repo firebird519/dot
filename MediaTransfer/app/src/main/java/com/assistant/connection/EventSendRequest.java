@@ -6,9 +6,11 @@ public class EventSendRequest {
     public Event event;
 
     public EventSendResponse response;
+    public int retryCount;
 
     public EventSendRequest(Event e, EventSendResponse r) {
         event = e;
         response = r;
+        retryCount = 0;
     }
 }

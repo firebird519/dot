@@ -41,6 +41,8 @@ public class ConnectionManager {
 
     public static final int DEFAULT_PORT = 8671;
 
+    public static int MAX_RECONNECT_COUNT = 3;
+
     private Context mContext;
 
     public interface ConnectionManagerListener {
@@ -48,6 +50,22 @@ public class ConnectionManager {
         void onConnectionRemoved(int id, int reason);
 
         void onEventReceived(int id, Event event);
+    }
+
+    private static class ReConnectRequest {
+        String ipAddress;
+        int port;
+        ConnectionCreationCallback listener;
+        int retryCount;
+        int connId;
+
+        ReConnectRequest(int id, String ip, int p, int retryTimes, ConnectionCreationCallback cb) {
+            connId = id;
+            ipAddress = ip;
+            port = p;
+            retryCount = retryTimes;
+            listener = cb;
+        }
     }
 
     public static class ConnectionManagerListenerBase implements ConnectionManagerListener {
@@ -92,6 +110,8 @@ public class ConnectionManager {
             mThreadHandler
                     .obtainMessage(EVENT_CONNECTION_CLOSED, reasonCode, 0, conn)
                     .sendToTarget();
+
+            conn.removeListener(this);
         }
     }
 
@@ -111,11 +131,14 @@ public class ConnectionManager {
 
     private boolean mStopped = false;
 
+    private boolean mReconnectFlag = true;
+
     private static final int EVENT_CONNECTION_ADDED = 0;
     private static final int EVENT_CONNECTION_CLOSED = 1;
     private static final int EVENT_CONNECTION_CONNECT_FAILED = 2;
     private static final int EVENT_CONNECTION_CREATION_TIMEOUT = 3;
     private static final int EVENT_HOSTCONNECTION_CLOSED = 4;
+    private static final int EVENT_CONNECTION_RECONNECT = 5;
 
     private static final int CONNECTION_CREATION_TIMEOUT_TIMESTAMP = 70*1000; //60s
     class ConnMgrThreadHandler extends Handler {
@@ -140,6 +163,9 @@ public class ConnectionManager {
                     break;
                 case EVENT_HOSTCONNECTION_CLOSED:
                     handleHostConnectionClosed((HostConnection) msg.obj, msg.arg1);
+                    break;
+                case EVENT_CONNECTION_RECONNECT:
+                    handleReconnectRequest((ReConnectRequest) msg.obj);
                     break;
                 default:
                     break;
@@ -191,7 +217,10 @@ public class ConnectionManager {
                     return;
                 }
 
-                connection.setId(generateConnectionId());
+                // this maybe reconnect and conneciton id already existd
+                if (connection.getId() < 0) {
+                    connection.setId(generateConnectionId());
+                }
                 connection.setWakeLock(
                         generateNetworkWakeLock(String.valueOf(connection.getId()) + ":0"),
                         generateNetworkWakeLock(String.valueOf(connection.getId()) + ":1"));
@@ -212,12 +241,29 @@ public class ConnectionManager {
         Log.d(TAG, "handleConnectionRemoved, id:" + connection.getId() + ", ip:"
                 + connection.getIp() + ", reason:" + reason);
         synchronized (mConnections) {
-            mConnections.remove(connection.getId());
+            if (mConnections.containsValue(connection)) {
+                mConnections.remove(connection.getId());
 
-            mDataTracker.onConnectionRemoved(connection);
+                String ip = connection.getIp();
+                if (!mReconnectFlag
+                        || !isReconnectAllowed(reason)
+                        || TextUtils.isEmpty(ip)
+                        || connection.getReconnectCount() >= MAX_RECONNECT_COUNT
+                        || connection.isHost()) {
+                    mDataTracker.onConnectionRemoved(connection);
+                    notifyConnectionRemoved(connection.getId(), reason);
+                } else {
+                    tryReconnectTo(connection.getId(),
+                            connection.getIp(),
+                            connection.getPort(),
+                            connection.getReconnectCount(),
+                            null);
+                }
 
-            notifyConnectionRemoved(connection.getId(), reason);
-            logConnectionList();
+                logConnectionList();
+            } else {
+                Log.d(TAG, "handleConnectionRemoved, connection already removed.");
+            }
         }
     }
 
@@ -345,7 +391,35 @@ public class ConnectionManager {
         mDataTracker.sendEvent(request);
     }
 
+    private void tryReconnectTo(int connId, String ip, int port, int retryTimes,
+                                ConnectionCreationCallback listener) {
+        ReConnectRequest request = new ReConnectRequest(connId, ip, port, retryTimes, listener);
+        mThreadHandler.obtainMessage(EVENT_CONNECTION_RECONNECT, request);
+    }
+
+    private void handleReconnectRequest(ReConnectRequest request) {
+        connectTo(request.connId,
+                request.ipAddress,
+                request.port,
+                request.retryCount,
+                request.listener);
+    }
+
+    private boolean isReconnectAllowed(int reason) {
+        if (reason == Connection.CONNECTION_REASON_CODE_IO_EXCEPTION
+                || reason == Connection.CONNECTION_REASON_CODE_CONNECT_TIMEOUT) {
+            return true;
+        }
+
+        return false;
+    }
+
     public void connectTo(final String ipAddress, int port, final ConnectionCreationCallback listener) {
+        connectTo(-1, ipAddress, port, 0, listener);
+    }
+
+    public void connectTo(final int connId, final String ipAddress, int port, int retryCount,
+                          final ConnectionCreationCallback listener) {
         mStopped = false;
 
         if (isIpConnected(ipAddress)) {
@@ -355,7 +429,7 @@ public class ConnectionManager {
 
         Log.d(TAG, "connectTo ip:" + ipAddress);
 
-        Connection connection =
+        final Connection connection =
                 ConnectionFactory.createConnection(ipAddress, port, new Connection.ConnectionListener() {
                     @Override
                     public void onConnected(Connection conn) {
@@ -390,18 +464,37 @@ public class ConnectionManager {
                         Log.d(TAG, "connectTo, onClosed for " + conn.getIp()
                                 + ", ipAddress:" + ipAddress);
 
-                        notifyConnectionCreationResult(conn, listener, false);
+                        String ip = conn.getIp();
 
-                        conn.removeListener(this);
+                        if (!mReconnectFlag
+                                || !isReconnectAllowed(reasonCode)
+                                || TextUtils.isEmpty(ip)
+                                || conn.getReconnectCount() >= MAX_RECONNECT_COUNT
+                                || conn.isHost()) {
+                            notifyConnectionCreationResult(conn, listener, false);
+
+                            conn.removeListener(this);
+                        } else {
+                            tryReconnectTo(conn.getId(),
+                                    conn.getIp(),
+                                    conn.getPort(),
+                                    conn.getReconnectCount(),
+                                    listener);
+                        }
                     }
                 });
 
         if (connection == null) {
             Log.d(TAG, "connectTo ip:" + ipAddress + ", connection creation failed!");
             notifyConnectionCreationResult(null, listener, false);
-        } else if(listener != null) {
-            Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
-            mThreadHandler.sendMessageDelayed(msg, CONNECTION_CREATION_TIMEOUT_TIMESTAMP);
+        } else {
+            connection.setId(connId);
+            connection.setReconnectCount(retryCount);
+
+            if (listener != null) {
+                Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
+                mThreadHandler.sendMessageDelayed(msg, CONNECTION_CREATION_TIMEOUT_TIMESTAMP);
+            }
         }
     }
 

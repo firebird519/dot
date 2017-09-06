@@ -64,6 +64,7 @@ public class Connection {
     public static final int CONNECTION_REASON_CODE_SOCKET_RECEIVING= -5;
     public static final int CONNECTION_REASON_CODE_IP_ALREADY_CONNECTED = -6;
     public static final int CONNECTION_REASON_CODE_CONNECT_TIMEOUT = -7;
+    public static final int CONNECTION_REASON_CODE_OUT_STREAM_CLOSED = -8;
 
     private int mLastReasonCode;
 
@@ -79,12 +80,15 @@ public class Connection {
     private int mState;
     private Object mConnData = null;
     private String mIpAddress;
+    private int mPort;
 
     private int mToBeClosedReason = 100;
 
     private int mId = -1;
 
     private boolean mIsHost;
+
+    private int mReconnectCount = 0;
 
     private boolean mIsDataSending;
     private boolean mIsDataReceiving;
@@ -123,14 +127,16 @@ public class Connection {
         mIsHost = isHost;
 
         if (socket != null) {
+            mPort = socket.getPort();
+
             if (socket.isConnected()) {
-                mState = CONNECTION_STATE_CONNECTED;
+                setState(CONNECTION_STATE_CONNECTED);
                 initSocketSteam();
             } else {
-                mState = CONNECTION_STATE_NOT_CONNECTED;
+                setState(CONNECTION_STATE_NOT_CONNECTED);
             }
         } else {
-            mState = CONNECTION_STATE_NOT_CONNECTED;
+            setState(CONNECTION_STATE_NOT_CONNECTED);
         }
 
         mThreadPool = new ThreadPool(3);
@@ -149,6 +155,18 @@ public class Connection {
             mIpAddress = mSocket.getInetAddress().getHostAddress();
         }
         return mIpAddress;
+    }
+
+    public int getPort() {
+        return mPort;
+    }
+
+    public void setReconnectCount(int count) {
+        mReconnectCount = count;
+    }
+
+    public int getReconnectCount() {
+        return mReconnectCount;
     }
 
     public void setWakeLock(PowerManager.WakeLock sendWakeLock,
@@ -185,10 +203,15 @@ public class Connection {
     private void setState(int state) {
         Log.d(TAG, "setState, state:" + state + ", pre state:" + mState);
         mState = state;
+
+        if (mState == CONNECTION_STATE_CONNECTED) {
+            mReconnectCount = 0;
+        }
     }
 
     public void connect(final String ip, final int port) {
         setState(Connection.CONNECTION_STATE_CONNECTING);
+        mPort = port;
 
         Log.d(TAG, "Connection connect ip:" + ip + ", port:" + port);
         mThreadPool.addTask(new Runnable() {
@@ -233,7 +256,7 @@ public class Connection {
 
         mIsDataSending = true;
 
-        int sentCount = 0;
+        int result = 0;
         int sendCountEveryTime;
         int countNotSend = (int)size;
 
@@ -242,17 +265,18 @@ public class Connection {
                 sendCountEveryTime = countNotSend > SOCKET_DEFAULT_BUF_SIZE ? SOCKET_DEFAULT_BUF_SIZE : countNotSend;
                 synchronized (mSocketOutputStreamLock) {
                     if (mSocketOutputStream != null) {
-                        mSocketOutputStream.write(data, sentCount, sendCountEveryTime);
+                        mSocketOutputStream.write(data, result, sendCountEveryTime);
                     } else {
                         Log.d(this, "send, SocketOutputStream is not init.");
+                        result = CONNECTION_REASON_CODE_OUT_STREAM_CLOSED;
                         break;
                     }
                 }
 
-                sentCount += sendCountEveryTime;
+                result += sendCountEveryTime;
                 countNotSend -= sendCountEveryTime;
 
-                Log.d(this, "send, sentCount:" + sentCount +
+                Log.d(this, "send, result:" + result +
                         ", countNotSend:" + countNotSend);
 
                 if (isValidReason(mToBeClosedReason)) {
@@ -272,20 +296,25 @@ public class Connection {
             ioe.printStackTrace();
 
             closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
+            result = CONNECTION_REASON_CODE_IO_EXCEPTION;
         }
 
         mIsDataSending = false;
-        Log.d(TAG, "send, sentCount:" + sentCount);
+        Log.d(TAG, "send, result:" + result);
 
         if (isValidReason(mToBeClosedReason)) {
             closeInteranl(mToBeClosedReason);
+
+            if (size != result) {
+                result = mToBeClosedReason;
+            }
         }
 
         if (mSendWakeLock.isHeld()) {
             mSendWakeLock.release();
         }
 
-        return sentCount;
+        return result;
     }
 
     /*
@@ -573,7 +602,30 @@ public class Connection {
         setState(CONNECTION_STATE_CLOSEED);
         mSocket = null;
 
-        notifyClosed(CONNECTION_REASON_CODE_IO_EXCEPTION);
+        notifyClosed(reason);
+    }
+
+    public static int ConnectionFailedReasonToResponseFailedCode(int failedReason) {
+        int result = EventSendResponse.FAILED_CONNECTION_CLOSED;
+
+        switch (failedReason) {
+            case CONNECTION_REASON_CODE_UNKNOWN_HOST:
+            case CONNECTION_REASON_CODE_NOT_CONNECTED:
+            case CONNECTION_REASON_CODE_OUT_STREAM_CLOSED:
+            case CONNECTION_REASON_CODE_CONNECT_TIMEOUT:
+                result = EventSendResponse.FAILED_CONNECTION_CLOSED;
+                break;
+            case CONNECTION_REASON_CODE_IO_EXCEPTION:
+                result = EventSendResponse.FAILED_CONNECTION_IO_EXCEPTION;
+                break;
+            case CONNECTION_REASON_CODE_SOCKET_SENDING:
+                result = EventSendResponse.FAILED_CONNECTION_SENDING;
+                break;
+            default:
+                break;
+        }
+
+        return result;
     }
 
     //=====
