@@ -1,9 +1,5 @@
 package com.assistant.utils;
 
-/**
- * Created by alex on 17-8-5.
- */
-
 import android.content.Context;
 import android.os.Environment;
 import android.text.TextUtils;
@@ -158,7 +154,7 @@ public class Log {
             return;
         }
 
-        android.util.Log.d(TAG, "fileName:" + fileName);
+        //android.util.Log.d(TAG, "fileName:" + fileName);
 
         String log = sDateFormat.format(sDate) + " " + type + " " + tag + ": " + msg + "\n";
 
@@ -168,7 +164,7 @@ public class Log {
             fos = new FileOutputStream(fileName, true);
             bw = new BufferedWriter(new OutputStreamWriter(fos));
             bw.write(log);
-            android.util.Log.d(TAG, "log:" + log);
+            //android.util.Log.d(TAG, "log:" + log);
 
             bw.close();
             bw = null;

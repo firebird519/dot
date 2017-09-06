@@ -2,10 +2,6 @@ package com.assistant.bytestring;
 
 import com.assistant.utils.Log;
 
-/**
- * Created by alex on 17-8-6.
- */
-
 public class ByteString {
     private static final String TAG = "ByteString";
 

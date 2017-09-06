@@ -4,12 +4,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 
-/**
- * Created by liyong on 17-9-5.
- */
 
 public class PermissionHelper {
-    // 所需的全部权限
     public static final String[] PERMISSIONS = new String[] {
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
     };

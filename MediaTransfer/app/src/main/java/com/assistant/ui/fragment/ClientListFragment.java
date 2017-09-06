@@ -37,10 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Created by liyong on 17-8-17.
- */
-
 public class ClientListFragment extends Fragment {
 
     private final static String INTENT_EXTRA_CONNECTION_INDEX = "extra_connection_index";
@@ -260,13 +256,15 @@ public class ClientListFragment extends Fragment {
                 if (mMediaTransferManager == null) {
                     return;
                 }
-
                 mConnIds = mMediaTransferManager.getConnectionIds();
 
                 if (mConnIds == null || mConnIds.length == 0) {
+                    Log.d(this, "updateClientInfo, no connection found.");
                     mClintInfos.clear();
                 } else {
                     for (Integer id : mConnIds) {
+                        Log.d(this, "updateClientInfo, id:" + id);
+
                         ClientInfoItem item = mClintInfos.get(id);
 
                         if (item == null) {
@@ -367,11 +365,13 @@ public class ClientListFragment extends Fragment {
         public void updateClientItemInfo() {
             unreadMsgCount = getUnreadMsgCount();
 
+            Log.d(this, "updateClientItemInfo, unreadMsgCount:" + unreadMsgCount);
+
             if (msgList == null || msgList.size() == 0) {
                 lastMsg = mActivity.getResources().getString(R.string.no_messages);
             } else {
                 Event event = msgList.get(msgList.size() - 1);
-                if (event != null) {
+                if (event instanceof ChatMessageEvent) {
                     lastMsg = ((ChatMessageEvent)event).message;
                 }
             }

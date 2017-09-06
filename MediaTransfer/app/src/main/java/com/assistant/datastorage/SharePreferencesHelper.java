@@ -3,15 +3,11 @@ package com.assistant.datastorage;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/**
- * Created by liyong on 17-8-25.
- */
-
 public class SharePreferencesHelper {
     private SharedPreferences mSharedPreferences;
     private static final String SP_NAME = "media_transfer";
 
-    public static final String SP_KEY_UNIQUE_ID = "uId";
+    public static final String SP_KEY_UNIQUE_ID = "clientUniqueId";
     public static final String SP_KEY_PORT = "port";
     public static final String SP_KEY_CLIENT_NAME = "clientName";
     public static final String SP_KEY_NETWORK_ON = "networkOn";

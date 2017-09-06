@@ -10,10 +10,6 @@ import java.net.UnknownHostException;
 
 import javax.net.SocketFactory;
 
-/**
- * Created by alex on 17-8-17.
- */
-
 public class ConnectionFactory {
     private static final String TAG = "ConnectionFactory";
 

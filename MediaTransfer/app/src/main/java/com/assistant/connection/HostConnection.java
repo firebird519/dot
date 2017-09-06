@@ -12,10 +12,6 @@ import java.net.Socket;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
-/**
- * Created by alex on 17-8-5.
- */
-
 public class HostConnection {
     private static String TAG = "HostConnection";
 

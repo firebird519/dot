@@ -1,10 +1,8 @@
 package com.assistant.events;
 
-/**
- * Created by alex on 17-8-26.
- */
-
 public class FileEvent extends Event {
+    public String filePathName;
+
     @Override
     public int getEventType() {
         return EVENT_TYPE_FILE;

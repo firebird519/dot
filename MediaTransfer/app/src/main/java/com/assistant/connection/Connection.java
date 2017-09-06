@@ -321,7 +321,7 @@ public class Connection {
         long bufSize = size; //byteString.getBufByteSize();
 
         while (true) {
-            if (mSocketInputStream == null) {
+            if (mSocketInputStream == null && mSocket != null) {
                 try {
                     Log.d(TAG, "receive, create new stream for socket data receiving!");
                     mSocketInputStream = new DataInputStream(mSocket.getInputStream());
@@ -577,7 +577,7 @@ public class Connection {
     }
 
     //=====
-    // listener implementation
+    // response implementation
     public void addListner(ConnectionListener listener) {
         if (listener != null) {
             mListeners.add(listener);

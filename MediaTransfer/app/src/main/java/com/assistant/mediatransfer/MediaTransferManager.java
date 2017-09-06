@@ -8,16 +8,24 @@ import android.os.Looper;
 import android.os.Message;
 import android.text.TextUtils;
 
+import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionCreationCallback;
 import com.assistant.connection.ConnectionManager;
+import com.assistant.connection.EventSendRequest;
+import com.assistant.connection.EventSendResponse;
 import com.assistant.datastorage.SharePreferencesHelper;
+import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
+import com.assistant.events.FileEvent;
 import com.assistant.utils.Log;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -47,18 +55,24 @@ public class MediaTransferManager {
     private Set<Integer> mConnectionIds =
             Collections.synchronizedSet(new HashSet<Integer>());
 
+    // TODO: key string use unique id of one connection.
+    private Map<Integer, Object> mMsgCollections =
+            Collections.synchronizedMap(new HashMap<Integer, Object>(10));
+
     // IMPORTANT: careful to change to avoid can not listen or connect to other client.
     private int mPort = ConnectionManager.DEFAULT_PORT;
 
     private ClientInfo mClientInfo;
 
-    private NetEventHandler mNetEventHandler;
     private SharePreferencesHelper mSharePreferencesHelper;
 
     private MThreadHandler mThreadHandler;
 
     class MThreadHandler extends Handler {
         public static final int EVENT_GENERATE_CLIENTINFO = 0;
+        public static final int EVENT_CONNECTION_ADDED = 1;
+        public static final int EVENT_CONNECTION_REMOVED = 2;
+        public static final int EVENT_CONNECTION_EVENT_RECEIVED = 3;
 
         MThreadHandler(Looper looper) {
             super(looper);
@@ -68,6 +82,15 @@ public class MediaTransferManager {
             switch (msg.what) {
                 case EVENT_GENERATE_CLIENTINFO:
                     generateClientInfo();
+                    break;
+                case EVENT_CONNECTION_ADDED:
+                    handleConnectionAdded(msg.arg1);
+                    break;
+                case EVENT_CONNECTION_REMOVED:
+                    handleConnectionClosed(msg.arg1, msg.arg2);
+                    break;
+                case EVENT_CONNECTION_EVENT_RECEIVED:
+                    handleEventReceived(msg.arg1, (Event) msg.obj);
                     break;
                 default:
                     break;
@@ -84,35 +107,25 @@ public class MediaTransferManager {
 
         mConnectionManager.addListener(new ConnectionManager.ConnectionManagerListener() {
             @Override
-            public void onConnectionAdded(int id) {}
+            public void onConnectionAdded(int id) {
+                mThreadHandler
+                        .obtainMessage(MThreadHandler.EVENT_CONNECTION_ADDED, id, 0)
+                        .sendToTarget();
+            }
 
             @Override
             public void onConnectionRemoved(int id, int reason) {
-                removeConnectId(id);
-
-                notifyClientDisconnected(id, reason);
+                mThreadHandler
+                        .obtainMessage(MThreadHandler.EVENT_CONNECTION_REMOVED, id, reason)
+                        .sendToTarget();
             }
 
             @Override
-            public void onDataReceived(int id, String data, boolean isFile) {}
-        });
-
-        mNetEventHandler = new NetEventHandler(this, mConnectionManager);
-        mNetEventHandler.addListener(new ConnectionEventListener() {
-            @Override
-            public void onClientAvailable(int connId, ClientInfo info) {
-                addConnectionId(connId);
-                notifyClientAvailable(connId, info);
-            }
-
-            @Override
-            public void onEventReceived(int connId, Event event) {
-                Log.d(this, "onEventReceived:" + event);
-                notifyEventReceived(connId, event);
-            }
-
-            @Override
-            public void onEventStateUpdated(int connId, Event event) {
+            public void onEventReceived(int id, Event event) {
+                mThreadHandler
+                        .obtainMessage(
+                                MThreadHandler.EVENT_CONNECTION_EVENT_RECEIVED, id, 0, event)
+                        .sendToTarget();
             }
         });
 
@@ -128,15 +141,38 @@ public class MediaTransferManager {
     }
 
     public List<Event> getMessageList(int connId) {
-        return mNetEventHandler.getMessageList(connId);
+        Connection connection = mConnectionManager.getConnection(connId);
+
+        if (connection != null) {
+            ClientInfo clientInfo = (ClientInfo) connection.getConnData();
+
+            Log.d(this, "getMessageList, get msg list for connId:" + connId);
+            if (clientInfo != null) {
+                return (List<Event>)mMsgCollections.get(connId);
+            } else {
+                Log.d(this, "getMessageList, clientInfo not received for id:" + connId);
+            }
+        } else {
+            Log.d(this, "getMessageList, connection not avaible for id:" + connId);
+        }
+
+        return null;
     }
 
-    public int sendEvent(int connId, Event event) {
+    public int sendEvent(int connId, Event event, EventSendResponse response) {
         if (event != null) {
-            mNetEventHandler.sendEvent(connId, event);
+            EventSendRequest request = new EventSendRequest(event, response);
+            recordEvent(connId, event);
+
+            Log.d(this, "sendEvent, connId:" + event.connId + ", event:" + event.getEventClassName());
+            mConnectionManager.sendEvent(request);
         }
 
         return 0;
+    }
+
+    public void sendEvent(EventSendRequest request) {
+        mConnectionManager.sendEvent(request);
     }
 
     public int sendFile(int connId, String strFilePathName) {
@@ -155,6 +191,106 @@ public class MediaTransferManager {
         }
 
         return ret;
+    }
+
+    private void handleConnectionAdded(int connId) {
+        Connection connection = mConnectionManager.getConnection(connId);
+
+        Log.d(this, "handleConnectionAdded, connId:" + connId);
+        if (connection != null && !connection.isHost()) {
+            sendClientInfoEvent(connId);
+        }
+    }
+
+    private void sendClientInfoEvent(int connId) {
+        Log.d(this, "sendClientInfoEvent, connId:" + connId);
+        ClientInfo clientInfoEvent = getClientInfo();
+
+        clientInfoEvent.setConnId(connId);
+        clientInfoEvent.setEventCreateTime(System.currentTimeMillis());
+
+        sendEvent(connId, clientInfoEvent, new EventSendResponse() {
+            @Override
+            public void onSendProgress(long eventId, int percent) {}
+
+            @Override
+            public void onResult(int connId, long eventId, int result, int failedReason) {
+                if (result == EventSendResponse.RESULT_FAILED) {
+                    Connection connection = mConnectionManager.getConnection(connId);
+
+                    if (connection != null) {
+                        Log.d(this,
+                                "ClientInfo Event send failed for connection:" + connId);
+                        connection.close(Connection.CONNECTION_REASON_CODE_IO_EXCEPTION);
+                    }
+                }
+            }
+        });
+    }
+
+    private void handleConnectionClosed(int connId, int closeReason) {
+        removeConnectId(connId);
+
+        notifyClientDisconnected(connId, closeReason);
+    }
+
+    private void handleEventReceived(int connId, Event event) {
+        Log.d(this, "handleEventReceived, connId:" + connId + ", event:" + event.toString());
+        switch (event.getEventType()) {
+            case Event.EVENT_TYPE_CLIENTNAME:
+                handleClientInfoEvent(connId, (ClientInfo)event);
+                break;
+            case Event.EVENT_TYPE_CHAT:
+                recordEvent(connId, event);
+                notifyEventReceived(connId, event);
+                break;
+            case Event.EVENT_TYPE_FILE:
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void handleClientInfoEvent(int connId, ClientInfo clientInfo) {
+        Connection connection = mConnectionManager.getConnection(connId);
+        if (connection != null) {
+
+            Log.d(this, "handleClientInfoEvent, received ClientInfo, connId:" + connection.getId());
+            connection.setConnData(clientInfo);
+            List<Event> mMsgArray =
+                    Collections.synchronizedList(new ArrayList<Event>());
+
+            Log.d(this, "handleClientInfoEvent, create msg list for uid:" + clientInfo.clientUniqueId);
+            mMsgCollections.put(connId, mMsgArray);
+            addConnectionId(connId);
+
+            notifyClientAvailable(connId, clientInfo);
+
+            // when connection connected, client send info to host side first.
+            // host side will send info back after received client info.
+            if (connection.isHost()) {
+                Log.d(this, "handleClientInfoEvent, response ClientInfo");
+                sendClientInfoEvent(connId);
+            }
+
+            notifyClientAvailable(connId, clientInfo);
+        }
+    }
+
+    void recordEvent(int connId, Event event){
+        if (event instanceof ChatMessageEvent
+                || event instanceof FileEvent) {
+            Log.d(this, "recordEvent, record event for connId:" + connId);
+            List<Event> msgList = getMessageList(connId);
+
+            if (msgList != null) {
+                msgList.add(event);
+            } else {
+                Log.d(this, "recordEvent, ChatMessageEvent message list not found!");
+            }
+        } else {
+            Log.d(this, "recordEvent, event not recorded:" + event.getEventClassName());
+        }
     }
 
     private void addConnectionId(int connId) {
@@ -198,7 +334,14 @@ public class MediaTransferManager {
     }
 
     public ClientInfo getClientInfo() {
-        return mClientInfo;
+        try {
+            return (ClientInfo)mClientInfo.clone();
+        } catch (CloneNotSupportedException e) {
+            Log.d(this, "getClientInfo CloneNotSupportedException:" + e.getMessage());
+        }
+
+        return null;
+
     }
 
     private void generateClientInfo() {

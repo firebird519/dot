@@ -17,7 +17,7 @@ public class MediaTransferApplication extends Application {
             Log.init(getApplicationContext());
         }
 
-        Log.d(this, "onCreate time:" + SystemClock.elapsedRealtime());
+        Log.d(this, "onCreate createTime:" + SystemClock.elapsedRealtime());
 
         MediaTransferService.startService(getApplicationContext(), true);
 

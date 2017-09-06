@@ -1,21 +1,20 @@
 package com.assistant.events;
 
-/**
- * Created by liyong on 17-8-25.
+/*
+ * response event for Event. To indicate that client has been received corresponding Event
  */
-
 public class VerifyEvent extends Event {
     public  int eventType;
     public  long eventUnId; // use SystemClock.elapsedRealtime();
 
-    public VerifyEvent(int type, long eventId) {
-        super(0, 0L);
+    public VerifyEvent(int connId, int type, long eventId) {
+        super(connId, 0L);
         eventType = type;
         eventUnId = eventId;
     }
 
     @Override
     public int getEventType() {
-        return EVENT_TYPE_VERIFY;
+        return Event.EVENT_TYPE_VERIFY;
     }
 }

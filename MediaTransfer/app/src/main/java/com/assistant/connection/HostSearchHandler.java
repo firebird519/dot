@@ -112,10 +112,10 @@ public class HostSearchHandler {
      * search XXX.XXX.XXX.* ip addresses which idAddress in.
      */
     public void searchServer(String ipSegment, int port, ServerSearchListener listener) {
-        // no listener set, invalid server search action
+        // no response set, invalid server search action
         if (listener == null || TextUtils.isEmpty(ipSegment) || port <= 0) {
             Log.d(TAG,
-                    "searchServer: input parameters is not valid! listener:" + listener +
+                    "searchServer: input parameters is not valid! response:" + listener +
                     ",ipSegment:" + ipSegment + ", port:" + port);
             return;
         }

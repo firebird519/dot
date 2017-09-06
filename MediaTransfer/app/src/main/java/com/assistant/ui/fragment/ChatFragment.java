@@ -141,10 +141,10 @@ public class ChatFragment extends Fragment {
                             new ChatMessageEvent(msg,
                                     System.currentTimeMillis(),
                                     mConnId,
-                                    mConnClientInfo.uId,
+                                    mConnClientInfo.clientUniqueId,
                                     false);
 
-                    mMediaTransManager.sendEvent(mConnId, event);
+                    mMediaTransManager.sendEvent(mConnId, event, null);
 
                     mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
                 }
@@ -279,12 +279,12 @@ public class ChatFragment extends Fragment {
             if (event != null) {
                 event.isShown = true;
 
-                long prevMsgTime = prevEvent != null ? prevEvent.time : 0L;
+                long prevMsgTime = prevEvent != null ? prevEvent.createTime : 0L;
 
-                Log.d(this, "prevMsgTime:" + prevMsgTime + ", cur event time:" + event.time);
-                if (event.time - prevMsgTime > TIME_DISPLAY_TIMESTAMP) {
+                Log.d(this, "prevMsgTime:" + prevMsgTime + ", cur event createTime:" + event.createTime);
+                if (event.createTime - prevMsgTime > TIME_DISPLAY_TIMESTAMP) {
                     viewHolder.time.setVisibility(View.VISIBLE);
-                    viewHolder.time.setText(getTimeString(event.time));
+                    viewHolder.time.setText(getTimeString(event.createTime));
                 } else {
                     viewHolder.time.setVisibility(View.GONE);
                 }

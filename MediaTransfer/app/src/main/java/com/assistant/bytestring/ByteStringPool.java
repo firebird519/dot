@@ -1,8 +1,5 @@
 package com.assistant.bytestring;
 
-/**
- * Created by alex on 17-8-6.
- */
 
 public class ByteStringPool {
     private static ByteStringPool sByteStringPool;

@@ -98,7 +98,7 @@ public class ClientConnection extends Connection {
         header.fileCreateTime = 0;
         header.fileLastAccessTime = 0;
 
-        // java last modified time is ms. but windows file time is 100ns and start with 1601-1-1 0:0:0. We convert to windows filetime here first!
+        // java last modified createTime is ms. but windows file createTime is 100ns and start with 1601-1-1 0:0:0. We convert to windows filetime here first!
         // TODO: Should move to windows client side.
         header.fileLastWriteTime = file.lastModified() * 10000;
         header.fileSize = file.length();
