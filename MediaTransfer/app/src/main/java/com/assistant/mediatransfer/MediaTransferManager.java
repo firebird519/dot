@@ -66,15 +66,17 @@ public class MediaTransferManager {
 
     private SharePreferencesHelper mSharePreferencesHelper;
 
-    private MThreadHandler mThreadHandler;
+    private ThreadHandler mThreadHandler;
 
-    class MThreadHandler extends Handler {
+    class ThreadHandler extends Handler {
         public static final int EVENT_GENERATE_CLIENTINFO = 0;
         public static final int EVENT_CONNECTION_ADDED = 1;
         public static final int EVENT_CONNECTION_REMOVED = 2;
         public static final int EVENT_CONNECTION_EVENT_RECEIVED = 3;
+        public static final int EVENT_LISTEN = 4;
+        public static final int EVENT_SEARCH_HOST = 5;
 
-        MThreadHandler(Looper looper) {
+        ThreadHandler(Looper looper) {
             super(looper);
         }
         @Override
@@ -91,6 +93,12 @@ public class MediaTransferManager {
                     break;
                 case EVENT_CONNECTION_EVENT_RECEIVED:
                     handleEventReceived(msg.arg1, (Event) msg.obj);
+                    break;
+                case EVENT_LISTEN:
+                    handleListenEvent(msg.arg1);
+                    break;
+                case EVENT_SEARCH_HOST:
+                    handleSearchHostEvent((ConnectionManager.SearchListener)msg.obj);
                     break;
                 default:
                     break;
@@ -109,14 +117,14 @@ public class MediaTransferManager {
             @Override
             public void onConnectionAdded(int id) {
                 mThreadHandler
-                        .obtainMessage(MThreadHandler.EVENT_CONNECTION_ADDED, id, 0)
+                        .obtainMessage(ThreadHandler.EVENT_CONNECTION_ADDED, id, 0)
                         .sendToTarget();
             }
 
             @Override
             public void onConnectionRemoved(int id, int reason) {
                 mThreadHandler
-                        .obtainMessage(MThreadHandler.EVENT_CONNECTION_REMOVED, id, reason)
+                        .obtainMessage(ThreadHandler.EVENT_CONNECTION_REMOVED, id, reason)
                         .sendToTarget();
             }
 
@@ -124,16 +132,16 @@ public class MediaTransferManager {
             public void onEventReceived(int id, Event event) {
                 mThreadHandler
                         .obtainMessage(
-                                MThreadHandler.EVENT_CONNECTION_EVENT_RECEIVED, id, 0, event)
+                                ThreadHandler.EVENT_CONNECTION_EVENT_RECEIVED, id, 0, event)
                         .sendToTarget();
             }
         });
 
         HandlerThread thread = new HandlerThread("MediaTransferManager");
         thread.start();
-        mThreadHandler = new MThreadHandler(thread.getLooper());
+        mThreadHandler = new ThreadHandler(thread.getLooper());
 
-        //mThreadHandler.sendEmptyMessage(MThreadHandler.EVENT_GENERATE_CLIENTINFO);
+        //mThreadHandler.sendEmptyMessage(ThreadHandler.EVENT_GENERATE_CLIENTINFO);
 
         generateClientInfo();
         mPort = mSharePreferencesHelper.getInt(SharePreferencesHelper.SP_KEY_PORT,
@@ -183,14 +191,21 @@ public class MediaTransferManager {
         return mPort;
     }
 
-    public Integer[] getConnectionIds() {
-        Integer[] ret;
+    public boolean isClientAvailable(int connId) {
         synchronized (mConnectionIds) {
-            Integer[] keyArray = new Integer[mConnectionIds.size()];
-            ret = mConnectionIds.toArray(keyArray);
+            return mConnectionIds.contains(connId);
+        }
+    }
+
+    public List<Integer> getConnectionIds() {
+        List<Integer> connIdList;
+        synchronized (mConnectionIds) {
+            connIdList =
+                    Collections.synchronizedList(new ArrayList<Integer>(mConnectionIds.size()));
+            connIdList.addAll(mConnectionIds);
         }
 
-        return ret;
+        return connIdList;
     }
 
     private void handleConnectionAdded(int connId) {
@@ -310,14 +325,24 @@ public class MediaTransferManager {
     }
 
     public void startListen() {
-        mConnectionManager.listen(getPort());
+        mThreadHandler.obtainMessage(ThreadHandler.EVENT_LISTEN,getPort(),0).sendToTarget();
     }
+
     public void startSearchHost(ConnectionManager.SearchListener listener) {
+        mThreadHandler.obtainMessage(ThreadHandler.EVENT_SEARCH_HOST,listener).sendToTarget();
+    }
+
+    private void handleListenEvent(int port) {
+        mConnectionManager.listen(port);
+    }
+
+    private void handleSearchHostEvent(ConnectionManager.SearchListener listener) {
         NetworkInfoManager networkInfoManager = NetworkInfoManager.getInstance(mContext);
         String ip = networkInfoManager.getWifiIpAddressString();
 
-        Log.d(this, "startSearchHost, ip:" + ip +
-                ", wifi connected:" + networkInfoManager.isWifiConnected());
+        Log.d(this, "startSearchHost, ip:" + ip
+                + ", wifi connected:" + networkInfoManager.isWifiConnected()
+                + ", listener:" + listener);
         if (!TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected()) {
             if (!mConnectionManager.isHostSearching()) {
                 mConnectionManager.searchHost(ip, mPort, listener);

@@ -26,6 +26,8 @@ public class ClientInfo extends Event implements Cloneable {
 
     @Override
     public String toString() {
-        return "ClientInfo, name:" + name + ", clientUniqueId:" + clientUniqueId;
+        return "ClientInfo - " + super.toString()
+                + ", name:" + name
+                + ", clientUniqueId:" + clientUniqueId;
     }
 }

@@ -39,7 +39,6 @@ public class ConnectionDataTracker extends Handler {
     private static final int EVENT_SEND_NETEVENT_TIMEOUT = 2;
     private static final int EVENT_SEND_NETEVENT_RETRY = 3;
 
-    public static final long NETEVENT_SEND_RETRY_TIMESTAMP = 2000; // 2s
     public static final int MAX_NETEVENT_SEND_RETRY_COUNT = 3;
 
     public static final long SEND_EVENT_TIMEOUT_TIMESTAMP = 30000; //30s
@@ -80,6 +79,7 @@ public class ConnectionDataTracker extends Handler {
                 handleEventSendTimeout();
                 break;
             case EVENT_SEND_NETEVENT_RETRY:
+                handleEventSendRequestRetry((EventSendRequest)msg.obj);
                 break;
             default:
                 break;
@@ -89,22 +89,30 @@ public class ConnectionDataTracker extends Handler {
 
     public void onConnectionAdded(Connection connection) {
         Log.d(TAG, "onConnectionAdded, id:" + connection.getId());
-        mConnectionSendQueues.put(connection.getId(),
-                Collections.synchronizedList(new ArrayList<EventSendRequest>(3)));
 
-        new ConnectionReceiverThread(connection).start();
+        synchronized (mConnectionSendQueues) {
+            List<EventSendRequest> sendQueue = mConnectionSendQueues.get(connection.getId());
+            if (sendQueue == null) {
+                mConnectionSendQueues.put(connection.getId(),
+                        Collections.synchronizedList(new ArrayList<EventSendRequest>(3)));
+            }
+
+            new ConnectionReceiverThread(connection).start();
+        }
     }
 
     public void onConnectionRemoved(Connection connection) {
-        List<EventSendRequest> sendQueue = mConnectionSendQueues.remove(connection.getId());
+        synchronized (mConnectionSendQueues) {
+            List<EventSendRequest> sendQueue = mConnectionSendQueues.remove(connection.getId());
 
-        if (sendQueue != null && sendQueue.size() > 0) {
-            for (EventSendRequest request : sendQueue) {
-                if (request.response != null) {
-                    request.response.onResult(connection.getId(),
-                            request.event.uniqueId,
-                            EventSendResponse.RESULT_FAILED,
-                            EventSendResponse.FAILED_CONNECTION_CLOSED);
+            if (sendQueue != null && sendQueue.size() > 0) {
+                for (EventSendRequest request : sendQueue) {
+                    if (request.response != null) {
+                        request.response.onResult(connection.getId(),
+                                request.event.uniqueId,
+                                EventSendResponse.RESULT_FAILED,
+                                EventSendResponse.FAILED_CONNECTION_CLOSED);
+                    }
                 }
             }
         }
@@ -134,13 +142,13 @@ public class ConnectionDataTracker extends Handler {
     }
 
     private void handleEventSendRequestRetry(EventSendRequest request) {
-        List<EventSendRequest> queue = getSendRequestQueue(request.event.connId);
-
         // request already timeout. not retry again!
-        if (!queue.contains(request)) {
+        if (!mToBeVerifiedRequests.contains(request)) {
+            Log.d(TAG, "handleEventSendRequestRetry, request timeout:" + request.toString());
             return;
         }
 
+        Log.d(TAG, "handleEventSendRequestRetry, resend request:" + request.toString());
         sendEvent(request);
     }
 
@@ -173,9 +181,13 @@ public class ConnectionDataTracker extends Handler {
                         + ", eventId:" + request.event.toString());
 
         // don't put verify event into to be verified queue.
-        if (request.event.getEventType() != Event.EVENT_TYPE_VERIFY) {
+        // and it this request is retry request, it should be already in to be verify list.
+        if (request.event.getEventType() != Event.EVENT_TYPE_VERIFY
+                && !mToBeVerifiedRequests.contains(request)) {
             mToBeVerifiedRequests.add(request);
         }
+
+        request.lastSendTime = SystemClock.elapsedRealtime();
 
         NetEvent netEvent =
                 new NetEvent(request.event.getEventType(),
@@ -188,11 +200,7 @@ public class ConnectionDataTracker extends Handler {
             strFilePathName = ((FileEvent) request.event).filePathName;
         }
 
-        Log.d(TAG, "handleEventSendRequest, connId:" + request.event.connId
-                + ", eventId:" + request.event.uniqueId
-                + ", event:" + netEvent.jsonData
-                + ", bytesLen:" + bytes.length
-                + ", strFilePathName:" + strFilePathName);
+        Log.d(TAG, "handleEventSendRequest, request:" + request.toString());
         mThreadPool.addTask(new EventSendRunnable(request.event.connId,
                 request.event.uniqueId,
                 bytes,
@@ -271,33 +279,51 @@ public class ConnectionDataTracker extends Handler {
     }
 
     private void handleEventSendTimeout() {
-        long sendTime;
         synchronized (mToBeVerifiedRequests) {
+            long timeoutTimestamp;
             for (EventSendRequest request: mToBeVerifiedRequests) {
-                sendTime = request.event.getEventCreatedElapsedTime();
-                if (SystemClock.elapsedRealtime() - sendTime > SEND_EVENT_TIMEOUT_TIMESTAMP) {
+
+                if (request.event.getEventType() != Event.EVENT_TYPE_FILE) {
+                    timeoutTimestamp = SEND_EVENT_TIMEOUT_TIMESTAMP;
+                } else {
+                    timeoutTimestamp = getTimeoutTimestampForFileSend((FileEvent)request.event);
+                }
+
+                if (SystemClock.elapsedRealtime() - request.lastSendTime > timeoutTimestamp) {
                     request.event.setState(Event.STATE_TIMEOUT);
 
-                    if (request.response != null) {
-                        request.response.onResult(request.event.connId,
-                                request.event.uniqueId,
-                                EventSendResponse.RESULT_FAILED,
-                                EventSendResponse.FAILED_TIMEOUT);
-                    }
+                    if (!tryResendEvent(request, EventSendResponse.FAILED_TIMEOUT)) {
+                        if (request.response != null) {
+                            request.response.onResult(request.event.connId,
+                                    request.event.uniqueId,
+                                    EventSendResponse.RESULT_FAILED,
+                                    EventSendResponse.FAILED_TIMEOUT);
+                        }
 
-                    mToBeVerifiedRequests.remove(request);
+                        mToBeVerifiedRequests.remove(request);
+                    }
                 }
             }
         }
     }
 
+    /*
+     * ATTENTION: As currently only for wifi network. define timeout 30s stamp for 1M data.
+     */
+    private long getTimeoutTimestampForFileSend(FileEvent event) {
+        return SEND_EVENT_TIMEOUT_TIMESTAMP
+                * event.fileSize/(1024*1024);
+    }
+
     private boolean tryResendEvent(EventSendRequest request, int failedReason) {
+        Log.d(TAG, "tryResendEvent, request retryCount:" + request.retryCount
+                + ", failedReason:"  +failedReason);
         if (request.retryCount < MAX_NETEVENT_SEND_RETRY_COUNT &&
                 (failedReason == EventSendResponse.FAILED_CONNECTION_CLOSED
                 || failedReason == EventSendResponse.FAILED_CONNECTION_SENDING
                 || failedReason == EventSendResponse.FAILED_CONNECTION_IO_EXCEPTION)) {
             request.retryCount ++;
-            obtainMessage(EVENT_SEND_NETEVENT_RETRY ,request);
+            obtainMessage(EVENT_SEND_NETEVENT_RETRY ,request).sendToTarget();
             return true;
         }
 
@@ -345,6 +371,7 @@ public class ConnectionDataTracker extends Handler {
                     Log.d(TAG, "EventSendRunnable, header:" + header.length);
 
                     ret = conn.send(header, ConnectionManager.DATA_HEADER_LEN_v1);
+
                     if (ret == ConnectionManager.DATA_HEADER_LEN_v1) {
                         ret = conn.send(bytes, bytesLen);
 
@@ -355,23 +382,8 @@ public class ConnectionDataTracker extends Handler {
 
                     Log.d(TAG, "EventSendRunnable, send ret:" + ret);
 
-                    if (response != null) {
-                        if (success) {
-                            response.onSendProgress(eventId, 100);
-                            response.onResult(connId,
-                                    eventId,
-                                    EventSendResponse.RESULT_SUCESS,
-                                    ret);
-                        } else {
-                            int failedCode = Connection.ConnectionFailedReasonToResponseFailedCode(ret);
-                            if (tryResendEvent(mRequest, failedCode)) {
-                                response.onResult(connId,
-                                        eventId,
-                                        EventSendResponse.RESULT_FAILED,
-                                        failedCode);
-                            }
-                        }
-                    }
+                    notifySendProgress(100);
+                    responseSendResult(success, 0, ret);
                 } else {
                     Log.d(TAG, "EventSendRunnable, send file:" + filePathName);
                     FileInputStream fileInputStream;
@@ -401,9 +413,8 @@ public class ConnectionDataTracker extends Handler {
                                     if (ret == bytesFileRead) {
 
                                         sentBytes += ret;
-                                        if (response != null) {
-                                            response.onSendProgress(eventId, (sentBytes * 100) / fileLen);
-                                        }
+
+                                        notifySendProgress((sentBytes * 100) / fileLen);
                                     } else {
                                         success = false;
                                         break;
@@ -414,9 +425,7 @@ public class ConnectionDataTracker extends Handler {
                                     success = true;
                                 }
                             } else if (ret == bytesLen) {
-                                if (response != null) {
-                                    response.onSendProgress(eventId, 100);
-                                }
+                                notifySendProgress(100);
                                 success = true;
                             }
                         }
@@ -426,30 +435,12 @@ public class ConnectionDataTracker extends Handler {
                         e.printStackTrace();
                     }
 
-                    if (response != null) {
-                        if (success) {
-                            response.onResult(connId, eventId, EventSendResponse.RESULT_SUCESS, 0);
-                        } else {
-                            int failedCode = Connection.ConnectionFailedReasonToResponseFailedCode(ret);
-                            if (!tryResendEvent(mRequest, failedCode)) {
-                                response.onResult(connId,
-                                        eventId,
-                                        EventSendResponse.RESULT_FAILED,
-                                        failedCode);
-                            }
-                        }
-                    }
+                    responseSendResult(success, ret, ret);
                 }
 
                 processNextRequest(connId);
             } else {
-                if (response != null
-                        && !tryResendEvent(mRequest, EventSendResponse.FAILED_CONNECTION_CLOSED)) {
-                    response.onResult(connId,
-                            eventId,
-                            EventSendResponse.RESULT_FAILED,
-                            EventSendResponse.FAILED_CONNECTION_CLOSED);
-                }
+                responseSendResult(false, EventSendResponse.FAILED_CONNECTION_CLOSED, 0);
             }
             Log.d(TAG, "EventSendRunnable, ended for connId:" + connId);
         }
@@ -479,6 +470,30 @@ public class ConnectionDataTracker extends Handler {
             buf.put("]".getBytes());
 
             return buf.array();
+        }
+
+        void notifySendProgress(int percent) {
+            if (response != null) {
+                response.onSendProgress(eventId, percent);
+            }
+        }
+        void responseSendResult(boolean isSucess, int reason, int sendBytesCount) {
+            if (response != null) {
+                if (isSucess) {
+                    response.onResult(connId,
+                            eventId,
+                            EventSendResponse.RESULT_SUCESS,
+                            sendBytesCount);
+                } else {
+                    int failedCode = Connection.ConnectionFailedReasonToResponseFailedCode(reason);
+                    if (!tryResendEvent(mRequest, failedCode)) {
+                        response.onResult(connId,
+                                eventId,
+                                EventSendResponse.RESULT_FAILED,
+                                failedCode);
+                    }
+                }
+            }
         }
     }
 
@@ -535,7 +550,16 @@ public class ConnectionDataTracker extends Handler {
                                 setState(RECEIVING_HEADER);
                             }
 
-                            NetEvent event = NetEvent.toEvent(buf.toString(), NetEvent.class);
+                            if (Utils.DEBUG) {
+                                Log.d(TAG, "toEvent:" + buf.toString());
+                            }
+
+                            NetEvent event = null;
+                            try {
+                                event = NetEvent.toEvent(buf.toString(), NetEvent.class);
+                            } catch (Exception e) {
+                                Log.e(TAG, "Exception for json parser. json:" + buf.toString());
+                            }
 
                             if (event != null) {
                                 Log.d(this, "NetEvent parsed:"
@@ -757,9 +781,8 @@ public class ConnectionDataTracker extends Handler {
         }
 
         private void closeConnection() {
-            // TODO: to made one logic for reconnect.
             if (mConnection != null) {
-                mConnection.close();
+                mConnection.close(Connection.CONNECTION_REASON_CODE_IO_EXCEPTION);
             }
         }
     }

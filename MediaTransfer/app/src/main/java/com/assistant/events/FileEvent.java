@@ -20,4 +20,10 @@ public class FileEvent extends Event {
     public FileEvent(int connectionId, long curTime) {
         super(connectionId, curTime);
     }
+
+    @Override
+    public String toString() {
+        return "FileEvent - " + super.toString()
+                + ", filePathName:" + filePathName;
+    }
 }

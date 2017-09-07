@@ -1,7 +1,6 @@
 package com.assistant.events;
 
 public class ChatMessageEvent extends Event {
-    public int id; // chatMessageId
     public String message;
 
     public String connUniqueId;//
@@ -19,6 +18,7 @@ public class ChatMessageEvent extends Event {
 
     @Override
     public String toString() {
-        return "ChatMessageEvent, connId:" + connId + ", message:" + message;
+        return "ChatMessageEvent - " + super.toString()
+                + ", message:" + message;
     }
 }

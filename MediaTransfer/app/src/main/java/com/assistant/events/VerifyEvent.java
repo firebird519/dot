@@ -17,4 +17,8 @@ public class VerifyEvent extends Event {
     public int getEventType() {
         return Event.EVENT_TYPE_VERIFY;
     }
+
+    public String toString() {
+        return "VerifyEvent, eventType:" + eventType + ", eventUnId:" + eventUnId;
+    }
 }

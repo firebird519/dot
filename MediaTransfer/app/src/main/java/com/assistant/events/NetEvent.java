@@ -28,4 +28,12 @@ public class NetEvent extends EventBase {
     public byte[] toBytes() {
         return sGson.toJson(this, NetEvent.class).getBytes();
     }
+
+    @Override
+    public String toString() {
+        return "ChatMessageEvent - " + super.toString()
+                + ", netEventId:" + netEventId
+                + ", eventId:" + eventId
+                + ", eventType:" + eventType;
+    }
 }

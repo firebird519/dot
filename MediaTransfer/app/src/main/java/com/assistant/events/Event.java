@@ -63,4 +63,13 @@ public abstract class Event extends EventBase{
     public String getEventClassName() {
         return getClass().toString();
     }
+
+    public String toString() {
+        return "[EventBase] - uniqueId:" + uniqueId
+                + ", connId:" + connId
+                + ", createTime:" + createTime
+                + ", mState:" + mState
+                + ", isShown:" + isShown
+                + ", isReceived:" + isReceived;
+    }
 }

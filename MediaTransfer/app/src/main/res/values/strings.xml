@@ -22,6 +22,8 @@
 
     <string name="searching">Searching...</string>
 
+    <string name="unknown">Unknown</string>
+
     <string name="drawer_open">Open</string>
     <string name="drawer_close">Close</string>
 

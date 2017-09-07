@@ -17,7 +17,7 @@ import java.util.Locale;
 public class Log {
     private static String TAG = "Log";
 
-    public static final boolean LOG_TO_FILE_FLAG = Utils.DEBUG;
+    public static final boolean LOG_TO_FILE_FLAG = false;//Utils.DEBUG;
 
     private static final String DEBUG = "D";
     private static final String ERROR = "E";

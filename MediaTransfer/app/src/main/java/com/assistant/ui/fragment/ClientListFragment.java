@@ -31,11 +31,10 @@ import com.assistant.utils.Log;
 import com.assistant.R;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class ClientListFragment extends Fragment {
 
@@ -55,8 +54,8 @@ public class ClientListFragment extends Fragment {
 
     private static final int EVENT_CANCEL_INDICATION = 0;
     private static final int EVENT_CONNECTION_LIST_UPDATED = 1;
-    private static final int EVENT_CONNECTION_AVAILABLE = 2;
-    private static final int EVENT_CONNECTION_REMOVED = 3;
+    private static final int EVENT_SEARCH_CONNECTION = 2;
+
     private Handler mHandler = new Handler(Looper.getMainLooper()) {
         @Override
         public void handleMessage(Message msg) {
@@ -64,12 +63,12 @@ public class ClientListFragment extends Fragment {
                 case EVENT_CANCEL_INDICATION:
                     hideIndicatorText();
                     break;
-                case EVENT_CONNECTION_AVAILABLE:
                 case EVENT_CONNECTION_LIST_UPDATED:
                     mClientListAdapter.updateClientInfo();
                     break;
-                case EVENT_CONNECTION_REMOVED:
-                    mClientListAdapter.removeClient(msg.arg1);
+                case EVENT_SEARCH_CONNECTION:
+                    handleConnectionSearchEvent();
+                    break;
                 default:
                     break;
             }
@@ -79,12 +78,16 @@ public class ClientListFragment extends Fragment {
 
     @Nullable
     @Override
-    public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater,
+                             @Nullable ViewGroup container,
+                             Bundle savedInstanceState) {
+        Log.d(this, "onCreateView start");
         return inflater.inflate(R.layout.client_list_layout, container, false);
     }
 
     @Override
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
+        Log.d(this, "onViewCreated start");
         super.onViewCreated(view, savedInstanceState);
 
         mListView = (ListView) view.findViewById(R.id.client_list_view);
@@ -92,7 +95,6 @@ public class ClientListFragment extends Fragment {
 
         mClientListAdapter = new ClientListAdapter();
         mListView.setAdapter(mClientListAdapter);
-        mClientListAdapter.updateClientInfo();
 
         mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
@@ -101,13 +103,14 @@ public class ClientListFragment extends Fragment {
                 intent.setClass(mActivity, ChattingActivity.class);
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-                Connection conn = (Connection) mClientListAdapter.getItem(position);
-                if (conn != null) {
-                    intent.putExtra(INTENT_EXTRA_CONNECTION_INDEX, conn.getId());
+                ClientInfoItem item = (ClientInfoItem) mClientListAdapter.getItem(position);
+                if (item != null) {
+                    intent.putExtra(INTENT_EXTRA_CONNECTION_INDEX, item.connId);
                     mActivity.startActivity(intent);
                 }
             }
         });
+        Log.d(this, "onViewCreated end");
     }
 
     private boolean isNetworkSettingsOn() {
@@ -122,6 +125,7 @@ public class ClientListFragment extends Fragment {
 
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
+        Log.d(this, "onActivityCreated start");
         super.onActivityCreated(savedInstanceState);
 
         mActivity = getActivity();
@@ -134,59 +138,42 @@ public class ClientListFragment extends Fragment {
         mMediaTransferManager = MediaTransferManager.getInstance(
                 getActivity().getApplicationContext());
 
+        updateClientListView();
+
         mMediaTransferManager.addListener(new MediaTransferManager.MediaTransferListener() {
             @Override
             public void onClientAvailable(int id, ClientInfo info) {
-                mHandler.sendEmptyMessage(EVENT_CONNECTION_AVAILABLE);
+                updateClientListView();
             }
 
             @Override
             public void onClientDisconnected(int id, int reason) {
-                mHandler.obtainMessage(EVENT_CONNECTION_REMOVED, id, reason).sendToTarget();
+                updateClientListView();
             }
 
             @Override
             public void onMessageReceived(int clientId, Event event) {
                 Log.d(this, "onEventReceived:" + event);
-                mHandler.removeMessages(EVENT_CONNECTION_LIST_UPDATED);
-                mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
+                updateClientListView();
             }
 
             @Override
             public void onMessageSendResult(int clientId, int msgId, boolean isSuccess) {
-                mHandler.removeMessages(EVENT_CONNECTION_LIST_UPDATED);
-                mHandler.sendEmptyMessage(EVENT_CONNECTION_LIST_UPDATED);
+                updateClientListView();
             }
         });
+
+        Log.d(this, "onActivityCreated end");
     }
 
     @Override
     public void onResume() {
-        if (isNetworkSettingsOn()) {
-            mMediaTransferManager.startListen();
-
-            showIndicatorText(R.string.searching);
-            mMediaTransferManager.startSearchHost(
-                    new ConnectionManager.SearchListener() {
-                        @Override
-                        public void onSearchCompleted() {
-                            Log.d(this, "onSearchCompleted");
-                            mHandler.removeMessages(EVENT_CANCEL_INDICATION);
-                            mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
-                        }
-
-                        @Override
-                        public void onSearchCanceled(int reason) {
-                            Log.d(this, "onSearchCanceled");
-                            mHandler.removeMessages(EVENT_CANCEL_INDICATION);
-                            mHandler.sendEmptyMessage(EVENT_CANCEL_INDICATION);
-                        }
-                    });
-        }
-
-        mClientListAdapter.updateClientInfo();
-
+        Log.d(this, "onResume start");
         super.onResume();
+
+        mHandler.sendEmptyMessage(EVENT_SEARCH_CONNECTION);
+        updateClientListView();
+        Log.d(this, "onResume end");
     }
 
     @Override
@@ -202,77 +189,129 @@ public class ClientListFragment extends Fragment {
 
     private void hideIndicatorText() {
         Log.d(this, "hideIndicatorText");
-        mIndicatorTextView.setText("");
-        mIndicatorTextView.setVisibility(View.INVISIBLE);
+        mIndicatorTextView.setVisibility(View.GONE);
     }
 
+    private void updateClientListView() {
+        if (!mHandler.hasMessages(EVENT_CONNECTION_LIST_UPDATED)) {
+            mHandler.sendEmptyMessageDelayed(EVENT_CONNECTION_LIST_UPDATED, 200);
+        } else {
+            Log.d(this, "updateClientListView, update ignored due to has message in loop.");
+        }
+    }
 
+    private void handleConnectionSearchEvent() {
+        Log.d(this, "handleConnectionSearchEvent");
+        if (isNetworkSettingsOn()) {
+            mMediaTransferManager.startListen();
+
+            showIndicatorText(R.string.searching);
+            mMediaTransferManager.startSearchHost(
+                    new ConnectionManager.SearchListener() {
+                        @Override
+                        public void onSearchCompleted() {
+                            Log.d(this, "onSearchCompleted");
+                            if (!mHandler.hasMessages(EVENT_CANCEL_INDICATION)) {
+                                mHandler.sendEmptyMessageDelayed(EVENT_CANCEL_INDICATION, 200);
+                            }
+                        }
+
+                        @Override
+                        public void onSearchCanceled(int reason) {
+                            Log.d(this, "onSearchCanceled");
+                            if (!mHandler.hasMessages(EVENT_CANCEL_INDICATION)) {
+                                mHandler.sendEmptyMessageDelayed(EVENT_CANCEL_INDICATION, 200);
+                            }
+                        }
+                    });
+        }
+    }
     class ClientListAdapter extends BaseAdapter {
-        Integer[] mConnIds = null;
-
-        private Map<Integer, ClientInfoItem> mClintInfos =
-                Collections.synchronizedMap(new HashMap<Integer, ClientInfoItem>(10));
+        private List<ClientInfoItem> mClintInfos =
+                Collections.synchronizedList(new ArrayList<ClientInfoItem>(5));
 
         @Override
         public int getCount() {
-            return mConnIds != null ? mConnIds.length : 0;
+            return mClintInfos.size();
         }
 
         @Override
         public Object getItem(int position) {
-            int id = -1;
-
-            if (position >= 0 && mConnIds != null && position < mConnIds.length) {
-                id = mConnIds[position];
+            if (position >= 0 && position < mClintInfos.size()) {
+                return mClintInfos.get(position);
             }
-            Connection conn = null;
 
-            if (id >= 0) {
-                conn = mConnManager.getConnection(id);
-            }
-            return conn;
+            Log.d(this, "getItem, position out of index:" + position
+                    + ", item size:" + mClintInfos.size());
+
+            return null;
         }
 
         @Override
         public long getItemId(int position) {
-            int id = -1;
-            if (position >= 0 && mConnIds != null && position < mConnIds.length) {
-                id = mConnIds[position];
-            }
-
-            return id;
+            return position;
         }
 
-        public void removeClient(int connId) {
-            synchronized (mClintInfos) {
-                mClintInfos.remove(connId);
-
-                updateClientInfo();
+        private ClientInfoItem getInfoItemByConnId(int connId) {
+            if (mClintInfos.size() == 0) {
+                return null;
             }
+
+            for(ClientInfoItem item : mClintInfos) {
+                if (item.connId == connId) {
+                    return item;
+                }
+            }
+
+            return null;
         }
 
         public void updateClientInfo() {
             synchronized (mClintInfos) {
                 if (mMediaTransferManager == null) {
+                    Log.d(this, "updateClientInfo, mMediaTransferManager not init");
                     return;
                 }
-                mConnIds = mMediaTransferManager.getConnectionIds();
+                List<Integer> connIdList = mMediaTransferManager.getConnectionIds();
 
-                if (mConnIds == null || mConnIds.length == 0) {
-                    Log.d(this, "updateClientInfo, no connection found.");
-                    mClintInfos.clear();
-                } else {
-                    for (Integer id : mConnIds) {
-                        Log.d(this, "updateClientInfo, id:" + id);
+                Log.d(this, "updateClientInfo, connIdList size:"
+                        + connIdList.size());
+                for (ClientInfoItem item : mClintInfos) {
+                    // remove ClientInfoItem for connection not available
+                    if (!mMediaTransferManager.isClientAvailable(item.connId)) {
+                        Log.d(this, "updateClientInfo, remove item for connId:"
+                                + item.connId);
+                        mClintInfos.remove(item);
+                        connIdList.remove(Integer.valueOf(item.connId));
+                        continue;
+                    }
 
-                        ClientInfoItem item = mClintInfos.get(id);
+                    Log.d(this, "updateClientInfo, update item for connId:"
+                            + item.connId);
 
-                        if (item == null) {
-                            item = new ClientInfoItem(id, mMediaTransferManager.getMessageList(id));
-                            mClintInfos.put(id, item);
+                    connIdList.remove(Integer.valueOf(item.connId));
+                    item.updateClientItemInfo();
+                }
+
+                // add ClientInfoItem for new available connection
+                if (connIdList.size() > 0) {
+                    ClientInfoItem item;
+                    Connection connection;
+                    for (Integer id: connIdList) {
+                        connection = mConnManager.getConnection(id);
+                        if (connection != null) {
+                            item = new ClientInfoItem(id,
+                                    connection.getIp(),
+                                    (ClientInfo) connection.getConnData(),
+                                    mMediaTransferManager.getMessageList(id));
+
+                            Log.d(this, "updateClientInfo, add item for connId:"
+                                    + item.connId);
+                            mClintInfos.add(item);
+                            item.updateClientItemInfo();
+                        } else {
+                            Log.d(this, "updateClientInfo, connection disconnect:" + id);
                         }
-
-                        item.updateClientItemInfo();
                     }
                 }
 
@@ -294,33 +333,18 @@ public class ClientListFragment extends Fragment {
                 holder = (ViewHolder) convertView.getTag();
             }
 
-            Connection conn = (Connection) getItem(position);
-
-            String name = "";
-            if (conn != null) {
-                ClientInfo info = (ClientInfo) conn.getConnData();
-                if (info != null) {
-                    name = info.name;
-                } else {
-                    name = conn.getIp();
-                }
-            } else {
-                Log.d(this, "Connection not found for position:" + position);
-                return null;
-            }
-
-            holder.clientNameView.setText(name);
-
-            SimpleDateFormat formatter = new SimpleDateFormat("MM月dd日 HH:mm:ss");
-            Date curDate = new Date(System.currentTimeMillis());//获取当前时间
-            String str = formatter.format(curDate);
-
+            String name = getString(R.string.unknown);
             synchronized (mClintInfos) {
-                ClientInfoItem item = mClintInfos.get(conn.getId());
-                if (item != null) {
-                    holder.lastMsgTimeView.setText(str);
+                ClientInfoItem item = (ClientInfoItem) getItem(position);
 
-                    holder.lastMsgSummaryView.setText(item.lastMsg);
+                if (item != null) {
+                    if (item.clientInfo != null) {
+                        name = item.clientInfo.name;
+                    } else {
+                        name = item.ipAddress;
+                    }
+
+                    holder.lastMsgSummaryView.setText(item.lastestMsg);
 
                     if (item.unreadMsgCount > 0) {
                         holder.circleIndicatorView.setText(String.valueOf(item.unreadMsgCount));
@@ -328,8 +352,18 @@ public class ClientListFragment extends Fragment {
                     } else {
                         holder.circleIndicatorView.setVisibility(View.GONE);
                     }
+                } else {
+                    Log.d(this, "Connection not found for position:" + position);
                 }
             }
+
+            holder.clientNameView.setText(name);
+
+            SimpleDateFormat formatter = new SimpleDateFormat("MM月dd日 HH:mm:ss");
+            Date curDate = new Date(System.currentTimeMillis());
+            String str = formatter.format(curDate);
+
+            holder.lastMsgTimeView.setText(str);
 
             return view;
         }
@@ -337,16 +371,20 @@ public class ClientListFragment extends Fragment {
 
     class ClientInfoItem {
         int connId;
+        String ipAddress;
+        ClientInfo clientInfo;
         int unreadMsgCount;
-        String lastMsg;
+        String lastestMsg;
 
         List<Event> msgList;
 
-        public ClientInfoItem(int id, List<Event> list) {
+        public ClientInfoItem(int id, String ip, ClientInfo info, List<Event> list) {
             connId = id;
             msgList = list;
+            ipAddress = ip;
+            clientInfo = info;
 
-            unreadMsgCount = getUnreadMsgCount();
+            unreadMsgCount = 0;
         }
 
         public int getUnreadMsgCount() {
@@ -367,12 +405,11 @@ public class ClientListFragment extends Fragment {
 
             Log.d(this, "updateClientItemInfo, unreadMsgCount:" + unreadMsgCount);
 
-            if (msgList == null || msgList.size() == 0) {
-                lastMsg = mActivity.getResources().getString(R.string.no_messages);
-            } else {
+            lastestMsg = mActivity.getResources().getString(R.string.no_messages);
+            if (msgList != null && msgList.size() > 0) {
                 Event event = msgList.get(msgList.size() - 1);
                 if (event instanceof ChatMessageEvent) {
-                    lastMsg = ((ChatMessageEvent)event).message;
+                    lastestMsg = ((ChatMessageEvent)event).message;
                 }
             }
         }

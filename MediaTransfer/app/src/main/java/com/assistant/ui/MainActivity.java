@@ -83,6 +83,7 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.d(this, "onCreate start");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         //initSideMenu();
@@ -93,6 +94,7 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         initActionBar();
 
         showClientListFragment();
+        Log.d(this, "onCreate end");
     }
 
     @Override
@@ -110,6 +112,7 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
 
     @Override
     protected void onResume() {
+        Log.d(this, "onResume start");
         super.onResume();
 
         // permission grant
@@ -123,6 +126,8 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         } else {
             Log.init(this);
         }
+
+        Log.d(this, "onResume end");
     }
 
     @Override

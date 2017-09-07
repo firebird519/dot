@@ -98,7 +98,7 @@ public class HostSearchHandler {
 
         if (ipBytes.length == 4) {
             int index = Utils.byteToInt(ipBytes[3]);
-            Log.d(TAG, "setIpMask, ip:" + ip + ", index:" + index);
+            Log.d(TAG, "setIpMask, ip:" + ip + ", index:" + index + ", mark:" + mark);
 
             mSearchIpMask[index] = mark;
         }
@@ -120,13 +120,13 @@ public class HostSearchHandler {
             return;
         }
 
-        mPort = port;
-        mListener = listener;
-
         if (isSearching()) {
             Log.d(TAG, "searchServer, searching...");
             return;
         }
+
+        mPort = port;
+        mListener = listener;
 
         mIsSearching = true;
         resetSearchIpMask();
@@ -263,7 +263,7 @@ public class HostSearchHandler {
                 String CONNECTION_TAG = TAG + "[" + ip + "]";
 
                 int state = connection.getState();
-                Log.d(CONNECTION_TAG, "onConnectingUpdate, ip:" + ip
+                Log.d(CONNECTION_TAG, "ConnectionCreateTask, ip:" + ip
                         + ",state:" + state);
 
                 if (Connection.CONNECTION_STATE_CONNECTING == state) {

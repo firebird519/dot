@@ -52,19 +52,30 @@ public class ConnectionManager {
         void onEventReceived(int id, Event event);
     }
 
-    private static class ReConnectRequest {
+    public static class ReConnectRequest {
         String ipAddress;
         int port;
         ConnectionCreationCallback listener;
         int retryCount;
         int connId;
+        int disconnectReason;
 
-        ReConnectRequest(int id, String ip, int p, int retryTimes, ConnectionCreationCallback cb) {
+        ReConnectRequest(int id, String ip, int connPort, int reason, int retryTimes, ConnectionCreationCallback cb) {
             connId = id;
             ipAddress = ip;
-            port = p;
+            port = connPort;
             retryCount = retryTimes;
             listener = cb;
+            disconnectReason = reason;
+        }
+
+        public String toString() {
+            return "[ReConnectRequest] - connId:" + connId
+                    + " ip:" + ipAddress
+                    + ", port:" + port
+                    + ", disconnect reason:" + disconnectReason
+                    + ", retryTimes:" + retryCount
+                    + ", listener:" + listener;
         }
     }
 
@@ -139,6 +150,8 @@ public class ConnectionManager {
     private static final int EVENT_CONNECTION_CREATION_TIMEOUT = 3;
     private static final int EVENT_HOSTCONNECTION_CLOSED = 4;
     private static final int EVENT_CONNECTION_RECONNECT = 5;
+    private static final int EVENT_NOTIFY_CONNECTION_ADDED = 6;
+    private static final int EVENT_NOTIFY_CONNECTION_REMOVED = 7;
 
     private static final int CONNECTION_CREATION_TIMEOUT_TIMESTAMP = 70*1000; //60s
     class ConnMgrThreadHandler extends Handler {
@@ -154,6 +167,12 @@ public class ConnectionManager {
                     break;
                 case EVENT_CONNECTION_CONNECT_FAILED:
                     handleConnectionRemoved((Connection)msg.obj, msg.arg1);
+                    break;
+                case EVENT_NOTIFY_CONNECTION_ADDED:
+                    notifyConnectionAdded(msg.arg1);
+                    break;
+                case EVENT_NOTIFY_CONNECTION_REMOVED:
+                    notifyConnectionRemoved(msg.arg1, msg.arg2);
                     break;
                 case EVENT_CONNECTION_CLOSED:
                     handleConnectionRemoved((Connection)msg.obj, msg.arg1);
@@ -206,9 +225,11 @@ public class ConnectionManager {
     }
 
     public void handleConnectionAdded(final Connection connection) {
+        Log.d(TAG, "handleConnectionAdded, ip:" + connection.getIp());
         synchronized (mConnections) {
             if (connection != null && !mConnections.containsValue(connection)) {
                 String ipAddress = connection.getIp();
+
                 if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() <= 2)) {
                     Log.d(this, "handleConnectionAdded: ipAddress already connected!");
                     connection.close(Connection.CONNECTION_REASON_CODE_IP_ALREADY_CONNECTED);
@@ -225,12 +246,14 @@ public class ConnectionManager {
                         generateNetworkWakeLock(String.valueOf(connection.getId()) + ":0"),
                         generateNetworkWakeLock(String.valueOf(connection.getId()) + ":1"));
                 mConnections.put(connection.getId(), connection);
-                connection.addListner(new ConnectionListenerImpl());
                 mDataTracker.onConnectionAdded(connection);
-
                 connection.startHeartBeat();
 
-                notifyConnectionAdded(connection.getId());
+                connection.addListner(new ConnectionListenerImpl());
+
+                mThreadHandler
+                        .obtainMessage(EVENT_NOTIFY_CONNECTION_ADDED, connection.getId(), 0)
+                        .sendToTarget();
 
                 logConnectionList();
             }
@@ -249,14 +272,15 @@ public class ConnectionManager {
                         || !isReconnectAllowed(reason)
                         || TextUtils.isEmpty(ip)
                         || connection.getReconnectCount() >= MAX_RECONNECT_COUNT
-                        || connection.isHost()) {
+                        || connection.isHost()
+                        || mStopped) {
                     mDataTracker.onConnectionRemoved(connection);
-                    notifyConnectionRemoved(connection.getId(), reason);
+                    mThreadHandler
+                            .obtainMessage(EVENT_NOTIFY_CONNECTION_REMOVED, connection.getId(), reason)
+                            .sendToTarget();
                 } else {
-                    tryReconnectTo(connection.getId(),
-                            connection.getIp(),
-                            connection.getPort(),
-                            connection.getReconnectCount(),
+                    tryReconnectTo(connection,
+                            reason,
                             null);
                 }
 
@@ -391,18 +415,33 @@ public class ConnectionManager {
         mDataTracker.sendEvent(request);
     }
 
-    private void tryReconnectTo(int connId, String ip, int port, int retryTimes,
+    private void tryReconnectTo(Connection connection, int disconnectReason,
                                 ConnectionCreationCallback listener) {
-        ReConnectRequest request = new ReConnectRequest(connId, ip, port, retryTimes, listener);
-        mThreadHandler.obtainMessage(EVENT_CONNECTION_RECONNECT, request);
+        if (connection == null) {
+            Log.d(TAG, "tryReconnectTo, connection should be not null here...");
+            return;
+        }
+
+        ReConnectRequest request = connection.getReconnectRequest();
+        if (request == null) {
+            request = new ReConnectRequest(connection.getId(), connection.getIp(),
+                    connection.getPort(), disconnectReason, 0, listener);
+        }
+
+        Log.d(TAG, "tryReconnectTo, " + request.toString());
+
+        request.retryCount ++;
+
+        mThreadHandler.obtainMessage(EVENT_CONNECTION_RECONNECT, request).sendToTarget();
     }
 
     private void handleReconnectRequest(ReConnectRequest request) {
+        Log.d(TAG, "handleReconnectRequest, request:" + request);
         connectTo(request.connId,
                 request.ipAddress,
                 request.port,
-                request.retryCount,
-                request.listener);
+                request.listener,
+                request);
     }
 
     private boolean isReconnectAllowed(int reason) {
@@ -415,14 +454,17 @@ public class ConnectionManager {
     }
 
     public void connectTo(final String ipAddress, int port, final ConnectionCreationCallback listener) {
-        connectTo(-1, ipAddress, port, 0, listener);
+        connectTo(-1, ipAddress, port, listener, null);
     }
 
-    public void connectTo(final int connId, final String ipAddress, int port, int retryCount,
-                          final ConnectionCreationCallback listener) {
+    /*
+     * @param connId: used for reconnect to specify id of new created connection
+     */
+    public void connectTo(final int connId, final String ipAddress, int port,
+                          final ConnectionCreationCallback listener, ReConnectRequest request) {
         mStopped = false;
 
-        if (isIpConnected(ipAddress)) {
+        if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() <= 2)) {
             notifyConnectionCreationResult(null, listener, true);
             return;
         }
@@ -472,24 +514,34 @@ public class ConnectionManager {
                                 || conn.getReconnectCount() >= MAX_RECONNECT_COUNT
                                 || conn.isHost()) {
                             notifyConnectionCreationResult(conn, listener, false);
-
-                            conn.removeListener(this);
                         } else {
-                            tryReconnectTo(conn.getId(),
-                                    conn.getIp(),
-                                    conn.getPort(),
-                                    conn.getReconnectCount(),
+                            tryReconnectTo(conn,
+                                    reasonCode,
                                     listener);
                         }
+
+                        conn.removeListener(this);
                     }
                 });
 
         if (connection == null) {
             Log.d(TAG, "connectTo ip:" + ipAddress + ", connection creation failed!");
-            notifyConnectionCreationResult(null, listener, false);
+            if (request == null) {
+                notifyConnectionCreationResult(null, listener, false);
+            } else if (request != null) {
+                Log.d(TAG, "reconnect to create connection failed, notify connection disconnect.");
+                // notify connection removed for retry failed.
+                mThreadHandler
+                        .obtainMessage(EVENT_NOTIFY_CONNECTION_REMOVED,
+                                connection.getId(), request.disconnectReason)
+                        .sendToTarget();
+            } else {
+                // impossible case?
+                Log.d(TAG, "reconnect request is null");
+            }
         } else {
             connection.setId(connId);
-            connection.setReconnectCount(retryCount);
+            connection.setReconnectRequest(request);
 
             if (listener != null) {
                 Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
@@ -583,6 +635,9 @@ public class ConnectionManager {
         void onSearchCanceled(int reason);
     }
 
+    private List<SearchListener> mSearchListeners =
+            new CopyOnWriteArrayList<SearchListener>();
+
     public boolean isHostSearching() {
         return HostSearchHandler.getInstance(mContext).isSearching();
     }
@@ -590,26 +645,58 @@ public class ConnectionManager {
     public void searchHost(String ipSegment, int port, final SearchListener listener) {
         mStopped = false;
 
+        if (listener != null) {
+            synchronized (mSearchListeners) {
+                mSearchListeners.add(listener);
+            }
+        }
+
+        if (isHostSearching()) {
+            Log.d(TAG, "searchHost, ipSegment:" + ipSegment + ", is in searching state!");
+            return;
+        }
+
         HostSearchHandler.getInstance(mContext).searchServer(ipSegment, port, new HostSearchHandler.ServerSearchListener() {
             @Override
             public void onSearchCompleted() {
-                if (listener != null) {
-                    listener.onSearchCompleted();
-                }
+                Log.d(TAG, "searchHost, onSearchCompleted");
+                notifySearchCompleted();
             }
 
             @Override
             public void onSearchCanceled(int reason) {
-                if (listener != null) {
-                    listener.onSearchCanceled(reason);
-                }
+                Log.d(TAG, "searchHost, onSearchCanceled reason:" + reason);
+                notifySearchCanceled(reason);
             }
 
             @Override
             public void onConnectionConnected(Connection connection) {
-                handleConnectionAdded(connection);
+                Log.d(TAG, "searchHost, onConnectionConnected, ip:" + connection.getIp());
+                mThreadHandler
+                        .obtainMessage(EVENT_CONNECTION_ADDED, connection)
+                        .sendToTarget();
             }
         });
+    }
+
+    private void notifySearchCompleted() {
+        synchronized (mSearchListeners) {
+            for (SearchListener listener : mSearchListeners) {
+                listener.onSearchCompleted();
+            }
+
+            mSearchListeners.clear();
+        }
+    }
+
+    private void notifySearchCanceled(int reason) {
+        synchronized (mSearchListeners) {
+            for (SearchListener listener : mSearchListeners) {
+                listener.onSearchCanceled(reason);
+            }
+
+            mSearchListeners.clear();
+        }
     }
 
     private PowerManager.WakeLock generateNetworkWakeLock(String id) {
@@ -627,7 +714,9 @@ public class ConnectionManager {
             if (mConnections.size() > 0) {
                 builder.append("mConnections, connection count:" + mConnections.size() + "\n");
                 for (Connection connection : mConnections.values()) {
-                    builder.append("id:" + connection.getId() + ", ip:" + connection.getIp() + "\n");
+                    builder.append("        id:" + connection.getId()
+                            + ", ip:" + connection.getIp()
+                            + ", host:" + connection.isHost() + "\n");
                 }
             } else {
                 builder.append("mConnections: no connections existed!");
