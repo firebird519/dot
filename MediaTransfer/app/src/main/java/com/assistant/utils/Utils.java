@@ -87,4 +87,20 @@ public class Utils {
         return mat.find();
     }
 
+    public static String bytesToHexString(byte[] bytes) {
+        StringBuilder builder = new StringBuilder();
+        if (bytes != null) {
+            int index = 0;
+            for(byte b: bytes) {
+                if (index%20 == 0) {
+                    builder.append("\n        ");
+                }
+                builder.append(String.format("%02X ", b));
+                index ++;
+            }
+        }
+
+        return builder.toString();
+    }
+
 }

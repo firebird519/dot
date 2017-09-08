@@ -269,17 +269,18 @@ public class MediaTransferManager {
     private void handleClientInfoEvent(int connId, ClientInfo clientInfo) {
         Connection connection = mConnectionManager.getConnection(connId);
         if (connection != null) {
-
-            Log.d(this, "handleClientInfoEvent, received ClientInfo, connId:" + connection.getId());
+            Log.d(this, "handleClientInfoEvent, received ClientInfo, connId:" + connection.getId()
+                    + ", client size:" + mConnectionIds.size());
             connection.setConnData(clientInfo);
-            List<Event> mMsgArray =
-                    Collections.synchronizedList(new ArrayList<Event>());
 
-            Log.d(this, "handleClientInfoEvent, create msg list for uid:" + clientInfo.clientUniqueId);
-            mMsgCollections.put(connId, mMsgArray);
+            if (mMsgCollections.get(connId) == null) {
+                List<Event> mMsgArray =
+                        Collections.synchronizedList(new ArrayList<Event>());
+
+                Log.d(this, "handleClientInfoEvent, create msg list for uid:" + clientInfo.clientUniqueId);
+                mMsgCollections.put(connId, mMsgArray);
+            }
             addConnectionId(connId);
-
-            notifyClientAvailable(connId, clientInfo);
 
             // when connection connected, client send info to host side first.
             // host side will send info back after received client info.
@@ -310,15 +311,39 @@ public class MediaTransferManager {
 
     private void addConnectionId(int connId) {
         synchronized (mConnectionIds) {
-            mConnectionIds.add(connId);
+            Log.d(this, "addConnectionId:" + connId);
+            if (!mConnectionIds.contains(Integer.valueOf(connId))) {
+                mConnectionIds.add(Integer.valueOf(connId));
+            }
         }
+
+        logConnectionIds();
     }
 
     private void removeConnectId(int connId) {
         synchronized (mConnectionIds) {
-            mConnectionIds.remove(connId);
+            mConnectionIds.remove(Integer.valueOf(connId));
         }
+
+        logConnectionIds();
     }
+
+    private void logConnectionIds() {
+        StringBuilder builder = new StringBuilder();
+
+        synchronized (mConnectionIds) {
+            if (mConnectionIds.size() > 0) {
+                for (Integer id : mConnectionIds) {
+                    builder.append(String.valueOf(id) + " ");
+                }
+            } else {
+                builder.append("No connection ids!");
+            }
+        }
+
+        Log.d(this, "mConnectionIds:" + builder.toString());
+    }
+
 
     public void connectTo(String ipAddress, int port, ConnectionCreationCallback listener) {
         mConnectionManager.connectTo(ipAddress, port, listener);
@@ -344,9 +369,7 @@ public class MediaTransferManager {
                 + ", wifi connected:" + networkInfoManager.isWifiConnected()
                 + ", listener:" + listener);
         if (!TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected()) {
-            if (!mConnectionManager.isHostSearching()) {
-                mConnectionManager.searchHost(ip, mPort, listener);
-            }
+            mConnectionManager.searchHost(ip, mPort, listener);
         } else {
             if (listener != null) {
                 listener.onSearchCompleted();

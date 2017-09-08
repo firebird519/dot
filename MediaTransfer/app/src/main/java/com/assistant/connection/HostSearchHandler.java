@@ -236,6 +236,10 @@ public class HostSearchHandler {
             Log.d(TAG, "ip:" + ipAddress + " already connected!");
             setByteIpMask(index, IP_MARK_CONNECTED);
             return;
+        } else if (ConnectionManager.getInstance(mContext).isReconnecting(ipAddress)) {
+            Log.d(TAG, "ip:" + ipAddress + " has reconnecting request!");
+            setByteIpMask(index, IP_MARK_CONNECT_FAILED);
+            return;
         }
 
         setByteIpMask(index, IP_MARK_CONNECTING);

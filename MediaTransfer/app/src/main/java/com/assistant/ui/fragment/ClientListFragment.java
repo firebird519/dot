@@ -276,21 +276,31 @@ public class ClientListFragment extends Fragment {
 
                 Log.d(this, "updateClientInfo, connIdList size:"
                         + connIdList.size());
-                for (ClientInfoItem item : mClintInfos) {
-                    // remove ClientInfoItem for connection not available
-                    if (!mMediaTransferManager.isClientAvailable(item.connId)) {
-                        Log.d(this, "updateClientInfo, remove item for connId:"
-                                + item.connId);
-                        mClintInfos.remove(item);
+
+                if (mClintInfos.size() > 0) {
+                    List<ClientInfoItem> toRemovedItems = new ArrayList<>(mClintInfos.size());
+                    for (ClientInfoItem item : mClintInfos) {
                         connIdList.remove(Integer.valueOf(item.connId));
-                        continue;
+
+                        // remove ClientInfoItem for connection not available
+                        if (!mMediaTransferManager.isClientAvailable(item.connId)) {
+                            Log.d(this, "updateClientInfo, remove item for connId:"
+                                    + item.connId);
+                            toRemovedItems.add(item);
+                            continue;
+                        }
+
+                        Log.d(this, "updateClientInfo, update item for connId:"
+                                + item.connId);
+                        item.updateClientItemInfo();
                     }
 
-                    Log.d(this, "updateClientInfo, update item for connId:"
-                            + item.connId);
-
-                    connIdList.remove(Integer.valueOf(item.connId));
-                    item.updateClientItemInfo();
+                    // remove disconnected client item
+                    if (toRemovedItems.size() > 0) {
+                        for (ClientInfoItem item : toRemovedItems) {
+                            mClintInfos.remove(item);
+                        }
+                    }
                 }
 
                 // add ClientInfoItem for new available connection
@@ -298,8 +308,9 @@ public class ClientListFragment extends Fragment {
                     ClientInfoItem item;
                     Connection connection;
                     for (Integer id: connIdList) {
+                        item = getInfoItemByConnId(id);
                         connection = mConnManager.getConnection(id);
-                        if (connection != null) {
+                        if (connection != null && item == null) {
                             item = new ClientInfoItem(id,
                                     connection.getIp(),
                                     (ClientInfo) connection.getConnData(),

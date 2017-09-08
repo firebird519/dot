@@ -368,7 +368,7 @@ public class ConnectionDataTracker extends Handler {
                 if (TextUtils.isEmpty(filePathName)) {
                     byte[] header = generateDataHeader(bytesLen, 0);
 
-                    Log.d(TAG, "EventSendRunnable, header:" + header.length);
+                    Log.d(TAG, "EventSendRunnable, header len:" + header.length);
 
                     ret = conn.send(header, ConnectionManager.DATA_HEADER_LEN_v1);
 
@@ -468,6 +468,10 @@ public class ConnectionDataTracker extends Handler {
             buf.putLong(fileLen);
             //Log.d(TAG, "p6:" + buf.position());
             buf.put("]".getBytes());
+
+            Log.d(TAG, "generateDataHeader, jsonLen:" + jsonLen
+                    + ", fileLen:" + fileLen
+                    + ", json:" + Utils.bytesToHexString(buf.array()));
 
             return buf.array();
         }
@@ -625,6 +629,13 @@ public class ConnectionDataTracker extends Handler {
          *
          */
         private void handleConnectionHeader() {
+            try {
+                Log.d(TAG, "handleConnectionHeader, received header:"
+                        + Utils.bytesToHexString(mHeaderBuf.array()));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
             byte start = mHeaderBuf.get();
             byte v = mHeaderBuf.get();
             byte colon1 = mHeaderBuf.get();

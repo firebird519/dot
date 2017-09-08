@@ -57,15 +57,20 @@ public class Connection {
 
     public static final int SOCKET_DEFAULT_BUF_SIZE = 64*1024;
 
-    public static final int CONNECTION_REASON_CODE_UNKNOWN_HOST = -1;
+    public static final int CONNECTION_REASON_CODE_UNKNOWN = 0;
+    public static final int CONNECTION_REASON_CODE_NOT_CONNECTED = -4;
     public static final int CONNECTION_REASON_CODE_IO_EXCEPTION = -2;
     public static final int CONNECTION_REASON_CODE_SOCKET_SENDING = -3;
-    public static final int CONNECTION_REASON_CODE_NOT_CONNECTED = -4;
     public static final int CONNECTION_REASON_CODE_SOCKET_RECEIVING= -5;
-    public static final int CONNECTION_REASON_CODE_IP_ALREADY_CONNECTED = -6;
-    public static final int CONNECTION_REASON_CODE_CONNECT_TIMEOUT = -7;
     public static final int CONNECTION_REASON_CODE_OUT_STREAM_CLOSED = -8;
     public static final int CONNECTION_REASON_CODE_CLOSE_MANUAL = -9;
+
+    public static final int CONNECTION_REASON_CODE_CONNECT_UNKNOWN_HOST = -20;
+    public static final int CONNECTION_REASON_CODE_CONNECT_TIMEOUT = -21;
+    public static final int CONNECTION_REASON_CODE_CONNECT_REQUEST_EXISTED = -22;
+    public static final int CONNECTION_REASON_CODE_CONNECT_REQUEST_CANCELED = -23;
+    public static final int CONNECTION_REASON_CODE_CONNECT_ALREADY_CONNECTED = -24;
+
 
     private int mLastReasonCode;
 
@@ -127,8 +132,19 @@ public class Connection {
     }
 
     public Connection(Socket socket, boolean isHost) {
+        this(socket, isHost, null);
+    }
+
+    public Connection(Socket socket,
+                      boolean isHost,
+                      final ConnectionManager.ReConnectRequest request) {
         mSocket = socket;
         mIsHost = isHost;
+
+        if (request != null) {
+            mId = request.connId;
+            mReconnectRequest = request;
+        }
 
         if (mIsHost) {
             TAG += "-HOST";
@@ -221,11 +237,6 @@ public class Connection {
         mState = state;
 
         if (mState == CONNECTION_STATE_CONNECTED) {
-            if (mReconnectRequest == null && !isHost()) {
-                Log.d(TAG, "setState, test code to close connection" + getId());
-                close(CONNECTION_REASON_CODE_IO_EXCEPTION);
-                return;
-            }
             mReconnectRequest = null;
         }
     }
@@ -466,7 +477,7 @@ public class Connection {
         } catch (UnknownHostException e) {
             Log.d(TAG, "createSocketAndNotify, failed:" + e.getMessage());
             e.printStackTrace();
-            reason = CONNECTION_REASON_CODE_UNKNOWN_HOST;
+            reason = CONNECTION_REASON_CODE_CONNECT_UNKNOWN_HOST;
         } catch (IOException e) {
             Log.d(TAG, "createSocketAndNotify, failed:" + e.getMessage());
             reason = CONNECTION_REASON_CODE_IO_EXCEPTION;
@@ -647,7 +658,7 @@ public class Connection {
         int result = EventSendResponse.FAILED_CONNECTION_CLOSED;
 
         switch (failedReason) {
-            case CONNECTION_REASON_CODE_UNKNOWN_HOST:
+            case CONNECTION_REASON_CODE_CONNECT_UNKNOWN_HOST:
             case CONNECTION_REASON_CODE_NOT_CONNECTED:
             case CONNECTION_REASON_CODE_OUT_STREAM_CLOSED:
             case CONNECTION_REASON_CODE_CONNECT_TIMEOUT:
@@ -677,7 +688,6 @@ public class Connection {
             }
         }
     }
-
 
     public void removeListener(ConnectionListener listener) {
         mListeners.remove(listener);

@@ -5,11 +5,13 @@
 6. add dump for managers...
 7. message and connection notification
 8. add sending queue  -- done
+9. add reconnect request cache to adjust if one ip is in reconnecting...
 
 10. multi ip segment search
 11. picture show etc
 12. message saving in disk
-
+13. support client still display when connection disconnected and add delete function in listview
+    to remove disconnected client.
 
 
 http://blog.csdn.net/yyh352091626/article/details/50542554

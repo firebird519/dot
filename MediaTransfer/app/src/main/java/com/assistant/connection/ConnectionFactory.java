@@ -25,14 +25,17 @@ public class ConnectionFactory {
         return host;
     }
 
-    public static Connection createConnection(String ip, int port,
+    public static Connection createConnection(String ip,
+                                              int port,
+                                              final ConnectionManager.ReConnectRequest request,
                                               Connection.ConnectionListener listener) {
-        Connection conn = new Connection(null, false);
+        Connection conn = new Connection(null, false, request);
 
         if (conn != null) {
             if (listener != null) {
                 conn.addListner(listener);
             }
+
             conn.connect(ip, port);
         }
 
