@@ -70,6 +70,7 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case EVENT_IP_CONNECT_RESULT:
+                    // TODO: need consider more cases. like reconnecting, existed etc.
                     int strId = (msg.arg1 == 1) ? R.string.ip_connect_success : R.string.ip_connect_failed;
                     stopProgressBar();
                     showToastMessage(getApplicationContext().getString(strId, (String)msg.obj));
@@ -229,10 +230,10 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         }
 
         @Override
-        public void onResult(boolean ret) {
+        public void onResult(boolean ret, int reason) {
             Log.d(this, "onResult:" + ret);
 
-            Message msg = mHandler.obtainMessage(EVENT_IP_CONNECT_RESULT, ret ? 1 : 0, 0);
+            Message msg = mHandler.obtainMessage(EVENT_IP_CONNECT_RESULT, ret ? 1 : 0, reason);
             msg.obj = ip;
 
             msg.sendToTarget();
