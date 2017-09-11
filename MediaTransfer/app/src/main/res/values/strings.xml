@@ -27,6 +27,7 @@
     <string name="drawer_open">Open</string>
     <string name="drawer_close">Close</string>
 
+    <string name="file">File:</string>
     <string name="send">Send</string>
 
     <string name="chat_input_view_hint">Input text...</string>

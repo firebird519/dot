@@ -76,13 +76,13 @@ public class FileChooserAdapter extends BaseAdapter {
 
         holder.tvFileName.setText(fileInfo.getFileName());
 
-        if (fileInfo.isDirectory()) {      //文件�?
+        if (fileInfo.isDirectory()) {
             holder.imgFileIcon.setImageResource(R.drawable.ic_folder);
             holder.tvFileName.setTextColor(Color.GRAY);
-        } else if (true/*fileInfo.isPPTFile()*/) {   //PPT文件
+        } else if (false/*fileInfo.isPPTFile()*/) {
             holder.imgFileIcon.setImageResource(R.drawable.ic_ppt);
             holder.tvFileName.setTextColor(Color.RED);
-        } else {                           //未知文件
+        } else {
             holder.imgFileIcon.setImageResource(R.drawable.ic_file_unknown);
             holder.tvFileName.setTextColor(Color.GRAY);
         }

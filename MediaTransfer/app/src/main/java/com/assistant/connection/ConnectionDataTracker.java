@@ -1,6 +1,7 @@
 package com.assistant.connection;
 
 import android.content.Context;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -31,9 +32,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.zip.CheckedOutputStream;
 
 public class ConnectionDataTracker extends Handler {
     private static final String TAG = "ConnectionDataTracker";
+
+    private static final String EXTRA_FILE_PATH_NAME = "filePathName";
+
     private static final int EVENT_SEND_NETEVENT = 0;
     private static final int EVENT_NETEVENT_RECEIVED = 1;
     private static final int EVENT_SEND_NETEVENT_TIMEOUT = 2;
@@ -42,6 +47,9 @@ public class ConnectionDataTracker extends Handler {
     public static final int MAX_NETEVENT_SEND_RETRY_COUNT = 3;
 
     public static final long SEND_EVENT_TIMEOUT_TIMESTAMP = 30000; //30s
+    public static final long MAX_FILE_TRANS_TIMESTAMP = 30*60*000; //30min
+
+
 
     public interface DataTrackerListener {
         void onEventReceived(int connId, Event event);
@@ -49,7 +57,8 @@ public class ConnectionDataTracker extends Handler {
 
     private Context mContext;
 
-    ConnectionManager mConnectionManager;
+    private ConnectionManager mConnectionManager;
+    private String mTempFileDir;
 
     private ThreadPool mThreadPool = new ThreadPool(5);
 
@@ -59,11 +68,18 @@ public class ConnectionDataTracker extends Handler {
     private final List<EventSendRequest> mToBeVerifiedRequests =
             Collections.synchronizedList(new ArrayList<EventSendRequest>());
 
-    public ConnectionDataTracker(Context context, ConnectionManager connectionManager, Looper looper) {
+    public ConnectionDataTracker(Context context,
+                                 ConnectionManager connectionManager,
+                                 Looper looper) {
         super(looper);
 
         mContext = context;
         mConnectionManager = connectionManager;
+        mTempFileDir = Utils.getAppStoragePath(context);
+
+        if (TextUtils.isEmpty(mTempFileDir)) {
+            mTempFileDir  = Utils.getAppStoragePath(mContext);
+        }
     }
 
     @Override
@@ -73,7 +89,12 @@ public class ConnectionDataTracker extends Handler {
                 handleEventSendRequest((EventSendRequest)msg.obj);
                 break;
             case EVENT_NETEVENT_RECEIVED:
-                handleReceivedNetEvent(msg.arg1, (NetEvent) msg.obj);
+                String strFilePathName = "";
+                Bundle bundle = msg.getData();
+                if (bundle != null) {
+                    strFilePathName = bundle.getString(EXTRA_FILE_PATH_NAME, "");
+                }
+                handleNetEventReceived(msg.arg1, (NetEvent) msg.obj, strFilePathName);
                 break;
             case EVENT_SEND_NETEVENT_TIMEOUT:
                 handleEventSendTimeout();
@@ -227,13 +248,13 @@ public class ConnectionDataTracker extends Handler {
         }
     }
 
-    private void handleReceivedNetEvent(int connId, NetEvent netEvent) {
+    private void handleNetEventReceived(int connId, NetEvent netEvent, String strFilePathName) {
         if (netEvent == null) {
             Log.d(this, "handleNetEvent, possible?");
             return;
         }
 
-        Log.d(this, "handleReceivedNetEvent, connId:" + connId
+        Log.d(this, "handleNetEventReceived, connId:" + connId
                 + ", netEvent:" + netEvent.jsonData);
 
         Event event = EventFactory.toEvent(connId,
@@ -241,18 +262,23 @@ public class ConnectionDataTracker extends Handler {
                 netEvent.eventType,
                 true);
 
-        if (event instanceof VerifyEvent) {
-            handleEventVerified((VerifyEvent) event);
-
+        if (event == null) {
+            Log.e(TAG, "handleNetEventReceived, parse json failed.");
             return;
         }
 
-        verifyEvent(connId, netEvent.eventType, netEvent.eventId);
-        if (event != null) {
-            notifyEventReceived(connId, event);
-        } else {
-            Log.e(TAG, "handleReceivedNetEvent parse json failed.");
+        if (event instanceof VerifyEvent) {
+            Log.d(TAG, "handleNetEventReceived, VerifyEvent received.");
+            handleEventVerified((VerifyEvent) event);
+            return;
         }
+
+        if (event instanceof FileEvent) {
+            ((FileEvent)event).filePathName = strFilePathName;
+        }
+
+        verifyEvent(connId, netEvent.eventType, netEvent.eventId);
+        notifyEventReceived(connId, event);
     }
 
     private void verifyEvent(int connId, int eventType, long eventId) {
@@ -286,7 +312,7 @@ public class ConnectionDataTracker extends Handler {
                 if (request.event.getEventType() != Event.EVENT_TYPE_FILE) {
                     timeoutTimestamp = SEND_EVENT_TIMEOUT_TIMESTAMP;
                 } else {
-                    timeoutTimestamp = getTimeoutTimestampForFileSend((FileEvent)request.event);
+                    timeoutTimestamp = getTimeoutTimestampForFileTrans((FileEvent)request.event);
                 }
 
                 if (SystemClock.elapsedRealtime() - request.lastSendTime > timeoutTimestamp) {
@@ -310,9 +336,15 @@ public class ConnectionDataTracker extends Handler {
     /*
      * ATTENTION: As currently only for wifi network. define timeout 30s stamp for 1M data.
      */
-    private long getTimeoutTimestampForFileSend(FileEvent event) {
-        return SEND_EVENT_TIMEOUT_TIMESTAMP
+    private long getTimeoutTimestampForFileTrans(FileEvent event) {
+        long timestamp = SEND_EVENT_TIMEOUT_TIMESTAMP
                 * event.fileSize/(1024*1024);
+
+        if (timestamp > MAX_FILE_TRANS_TIMESTAMP) {
+            timestamp = MAX_FILE_TRANS_TIMESTAMP;
+        }
+
+        return timestamp;
     }
 
     private boolean tryResendEvent(EventSendRequest request, int failedReason) {
@@ -407,16 +439,17 @@ public class ConnectionDataTracker extends Handler {
                                 int sentBytes = 0;
                                 int bytesFileRead;
                                 do {
-                                    bytesFileRead = fileInputStream.read(buffer);
+                                    bytesFileRead = fileInputStream.read(buffer, 0, bufferSize);
                                     ret = conn.send(buffer, bytesFileRead);
 
                                     if (ret == bytesFileRead) {
 
                                         sentBytes += ret;
 
+                                        Log.e(TAG, "file sent:" + sentBytes);
                                         notifySendProgress((sentBytes * 100) / fileLen);
                                     } else {
-                                        success = false;
+                                        Log.e(TAG, "file send error with reason:" + ret);
                                         break;
                                     }
                                 } while (sentBytes < fileLen);
@@ -427,6 +460,13 @@ public class ConnectionDataTracker extends Handler {
                             } else if (ret == bytesLen) {
                                 notifySendProgress(100);
                                 success = true;
+                            }
+                        } else {
+                            if (!conn.isClosed()) {
+                                Log.e(TAG, "file json send failed! close connection. reason:" + ret);
+                                conn.close(ret);
+                            } else {
+                                Log.e(TAG, "file json send failed! connection closed:" + ret);
                             }
                         }
 
@@ -456,6 +496,7 @@ public class ConnectionDataTracker extends Handler {
 
             buf.put("[v:".getBytes());
 
+            // TODO: simple data structure...
             //Log.d(TAG, "p1:" + buf.position());
             buf.putLong(1);
             //Log.d(TAG, "p2:" + buf.position());
@@ -516,6 +557,8 @@ public class ConnectionDataTracker extends Handler {
 
         private int mReceivingState = RECEIVING_HEADER;
 
+        private NetEvent mWaitingNetEvent = null;
+
         ConnectionReceiverThread(Connection connection) {
             mConnection = connection;
         }
@@ -546,7 +589,7 @@ public class ConnectionDataTracker extends Handler {
                 } else if (mReceivingState == RECEIVING_JSON) {
                     Log.d(TAG, "ConnectionReceiverThread, mJsonLen:" + mJsonLen);
                     if (mJsonLen <= ByteString.DEFAULT_STRING_SIZE) {
-                        ByteString buf = handleDataReceiving((int)mJsonLen);
+                        ByteString buf = handleJsonReceiving((int)mJsonLen);
                         if (buf != null) {
                             if (mFileLen > 0) {
                                 setState(RECEIVING_FILE);
@@ -565,13 +608,15 @@ public class ConnectionDataTracker extends Handler {
                                 Log.e(TAG, "Exception for json parser. json:" + buf.toString());
                             }
 
-                            if (event != null) {
+                            if (event != null && event.eventType != Event.EVENT_TYPE_FILE) {
                                 Log.d(this, "NetEvent parsed:"
                                         + buf.toString());
 
                                 obtainMessage(EVENT_NETEVENT_RECEIVED,
                                         mConnection.getId(), 0, event)
                                         .sendToTarget();
+                            } else if (event != null && event.eventType == Event.EVENT_TYPE_FILE) {
+                                mWaitingNetEvent = event;
                             } else {
                                 Log.e(this, "NetEvent parse failed. Ignored! data:"
                                         + buf.toString());
@@ -587,20 +632,24 @@ public class ConnectionDataTracker extends Handler {
                     }
 
                 } else if (mReceivingState == RECEIVING_FILE) {
-                    ByteString buf = handleDataReceiving((int)mFileLen);
+                    String pathName = handleFileReceiving((int)mFileLen);
 
-                    if (buf != null) {
+                    if (!TextUtils.isEmpty(pathName)) {
                         setState(RECEIVING_HEADER);
 
-                            /*
-                            Message msg = mThreadHandler.obtainMessage(
-                                    EVENT_CONNECTION_DATA_RECEIVED,
+                        if (mWaitingNetEvent != null) {
+                            Message msg = obtainMessage(
+                                    EVENT_NETEVENT_RECEIVED,
                                     mConnection.getId(),
-                                    (mFileLen > ByteString.DEFAULT_STRING_SIZE ? 1 : 0));
+                                    (int) mFileLen);
 
-                            msg.obj = buf.toString();
-                            msg.sendToTarget();*/
-                        buf.release();
+                            Bundle bundle = new Bundle();
+                            bundle.putString(EXTRA_FILE_PATH_NAME, pathName);
+                            msg.setData(bundle);
+
+                            msg.obj = mWaitingNetEvent;
+                            msg.sendToTarget();
+                        }
                     } else {
                         closeConnection();
                     }
@@ -665,7 +714,11 @@ public class ConnectionDataTracker extends Handler {
                     colon3 == ':' &&
                     sep1 == ';' &&
                     sep2 == ';') {
-                setState(RECEIVING_JSON);
+                if (mJsonLen > 0) {
+                    setState(RECEIVING_JSON);
+                } else {
+                    setState(RECEIVING_HEADER);
+                }
             } else {
                 Log.d(TAG, "handleConnectionHeader, mHeaderBuf not right:"
                         + mHeaderBuf.toString());
@@ -678,117 +731,114 @@ public class ConnectionDataTracker extends Handler {
             mHeaderBuf.clear();
         }
 
-        private ByteString handleDataReceiving(int len) {
+        private ByteString handleJsonReceiving(int dataLen) {
             if (mConnection == null ||
                     mConnection.getState() != Connection.CONNECTION_STATE_CONNECTED) {
                 return null;
             }
-
-            if (len <= ByteString.DEFAULT_STRING_SIZE) {
+            if (dataLen <= ByteString.DEFAULT_STRING_SIZE) {
                 ByteString buf = ByteStringPool.getInstance().getByteString();
                 int bytesReceived = 0;
                 if (mConnection != null &&
                         mConnection.getState() == Connection.CONNECTION_STATE_CONNECTED) {
-                    bytesReceived = mConnection.receive(buf.data, len);
+                    bytesReceived = mConnection.receive(buf.data, dataLen);
                 }
 
-                if (bytesReceived != len) {
+                if (bytesReceived != dataLen) {
                     // some problem happened.
                     buf.release();
                     buf = null;
                 } else {
-                    buf.setDataLen(len);
-                }
-
-                return buf;
-            } else {
-                String path = Utils.getAppStoragePath(mContext);
-
-                if (TextUtils.isEmpty(path)) {
-                    // some problems happened that app file path get failed.
-                    return null;
-                }
-
-                String fileName = String.valueOf(mConnection.hashCode()) +
-                        "_" +
-                        String.valueOf(System.currentTimeMillis() % 10000);
-
-                File file = new File(path, fileName);
-                try {
-                    file.createNewFile();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    return null;
-                }
-
-                FileOutputStream fileOpStream = null;
-                try {
-                    fileOpStream = new FileOutputStream(file);
-                } catch (FileNotFoundException e) {
-                    Log.e(this, "can't create FileOutputStream");
-                    e.printStackTrace();
-                    return null;
-                }
-
-                long receivedCount = 0;
-                long bytesToReceive = 0;
-                long bytesReceived = 0;
-
-                boolean errorHappened = false;
-
-                ByteString buf = ByteStringPool.getInstance().getByteString();
-                do {
-                    if (len - receivedCount >= ByteString.DEFAULT_STRING_SIZE) {
-                        bytesToReceive = ByteString.DEFAULT_STRING_SIZE;
-                    } else {
-                        bytesToReceive = len - receivedCount;
-                    }
-
-                    if (mConnection != null &&
-                            mConnection.getState() == Connection.CONNECTION_STATE_CONNECTED) {
-                        bytesReceived = mConnection.receive(buf.data, bytesToReceive);
-                    }
-
-                    if (bytesToReceive != bytesReceived) {
-                        errorHappened = true;
-                        break;
-                    }
-
-                    receivedCount += bytesReceived;
-
-                    try {
-                        fileOpStream.write(buf.data, 0, (int) bytesReceived);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-
-                        errorHappened = true;
-                        break;
-                    }
-                } while (len > receivedCount);
-
-                try {
-                    fileOpStream.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    errorHappened = true;
-                }
-
-                if (errorHappened) {
-                    buf.release();
-                    buf = null;
-                } else {
-                    String filePathName = path + "/" + fileName;
-                    int length = buf.putData(filePathName.getBytes());
-
-                    if (length == 0) {
-                        Log.d(this, "copy file path name to bytestring error.");
-                        buf.release();
-                        buf = null;
-                    }
+                    buf.setDataLen(dataLen);
                 }
 
                 return buf;
             }
+
+            return null;
+        }
+
+        private String handleFileReceiving(int fileLen) {
+            if (mConnection == null ||
+                    mConnection.getState() != Connection.CONNECTION_STATE_CONNECTED) {
+                return "";
+            }
+
+            String path = mTempFileDir;
+
+            String fileName = String.valueOf(mConnection.hashCode()) +
+                    "_" +
+                    String.valueOf(System.currentTimeMillis() % 10000);
+
+            File file = new File(path, fileName);
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                Log.e(TAG, "Create temp file exception:" + e.getMessage());
+                return "";
+            }
+
+            FileOutputStream fileOpStream;
+            try {
+                fileOpStream = new FileOutputStream(file);
+            } catch (FileNotFoundException e) {
+                file.delete();
+                Log.e(TAG, "can't create FileOutputStream, exception:" + e.getMessage());
+                return "";
+            }
+
+            long receivedCount = 0;
+            long bytesToReceive = 0;
+            long bytesReceived = 0;
+
+            boolean success = false;
+
+            ByteString buf = ByteStringPool.getInstance().getByteString();
+            do {
+                if (fileLen - receivedCount >= ByteString.DEFAULT_STRING_SIZE) {
+                    bytesToReceive = ByteString.DEFAULT_STRING_SIZE;
+                } else {
+                    bytesToReceive = fileLen - receivedCount;
+                }
+
+                if (mConnection != null &&
+                        mConnection.getState() == Connection.CONNECTION_STATE_CONNECTED) {
+                    bytesReceived = mConnection.receive(buf.data, bytesToReceive);
+                }
+
+                if (bytesReceived < 0) {
+                    Log.e(TAG, "error happened when receiving data:" + bytesReceived);
+                    break;
+                }
+
+                receivedCount += bytesReceived;
+
+                try {
+                    fileOpStream.write(buf.data, 0, (int) bytesReceived);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    break;
+                }
+            } while (fileLen > receivedCount);
+
+            if (fileLen == receivedCount) {
+                success = true;
+            }
+
+            try {
+                fileOpStream.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            buf.release();
+            if (success) {
+                return file.getPath();
+            }
+
+            file.delete();
+
+            return "";
         }
 
         private void closeConnection() {

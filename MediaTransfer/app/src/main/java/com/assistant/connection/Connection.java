@@ -57,7 +57,7 @@ public class Connection {
 
     public static final int SOCKET_DEFAULT_BUF_SIZE = 64*1024;
 
-    public static final int CONNECTION_REASON_CODE_UNKNOWN = 0;
+    public static final int CONNECTION_REASON_CODE_UNKNOWN = -1;
     public static final int CONNECTION_REASON_CODE_NOT_CONNECTED = -4;
     public static final int CONNECTION_REASON_CODE_IO_EXCEPTION = -2;
     public static final int CONNECTION_REASON_CODE_SOCKET_SENDING = -3;
@@ -141,14 +141,17 @@ public class Connection {
         mSocket = socket;
         mIsHost = isHost;
 
-        if (request != null) {
-            mId = request.connId;
-            mReconnectRequest = request;
-        }
-
         if (mIsHost) {
             TAG += "-HOST";
         }
+
+        if (request != null) {
+            mId = request.connId;
+
+            TAG += ":" + mId;
+            mReconnectRequest = request;
+        }
+
 
         mThreadPool = new ThreadPool(3);
 
@@ -367,7 +370,7 @@ public class Connection {
 
         if (buf == null || size <= 0) {
             Log.d(this, "receive parameter is not right! buf:" + buf + ", size:" + size);
-            return 0;
+            return CONNECTION_REASON_CODE_UNKNOWN;
         }
 
         if (mIsDataReceiving) {
@@ -436,11 +439,8 @@ public class Connection {
             } else if (receivedEverytime < 0) {
                 closeSocketInputStream();
 
-                try {
-                    Thread.sleep(200);
-                }catch (InterruptedException e) {
-
-                }
+                receivedCount = receivedEverytime;
+                break;
             } else if (receivedEverytime == 0) {
                 try {
                     Thread.sleep(200);
@@ -453,7 +453,7 @@ public class Connection {
         if (isValidReason(mToBeClosedReason)) {
             closeInteranl(mToBeClosedReason);
 
-            return 0;
+            return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
 
         // ignore previous heart beat event which only needed if there is no data traffic.
@@ -531,24 +531,22 @@ public class Connection {
     }
 
     public void startHeartBeat() {
-        if (mState == CONNECTION_STATE_CONNECTED) {
+/*        if (mState == CONNECTION_STATE_CONNECTED) {
             mThreadHandler.removeMessages(ThreadHandler.EVENT_HEART_BEAT);
             mThreadHandler.sendEmptyMessageDelayed(ThreadHandler.EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
-        }
+        }*/
     }
 
     private void heartBeat() {
         sendUrgentData();
 
-        if (mState == CONNECTION_STATE_CONNECTED) {
-            mThreadHandler.sendEmptyMessageDelayed(ThreadHandler.EVENT_HEART_BEAT, HEART_BEAT_TIMESTAMP);
-        }
+        startHeartBeat();
     }
     /*
      * used for socket heart-beat checking.
      */
     private void sendUrgentData() {
-        mThreadPool.addTask(new Runnable() {
+/*        mThreadPool.addTask(new Runnable() {
 
             @Override
             public void run() {
@@ -558,6 +556,7 @@ public class Connection {
                     }
 
                     // also use urgent data
+                    // TODO: This urgent data can be received by client. think another way...
                     try {
                         mSocket.sendUrgentData(0xFF);
                     } catch (IOException e1) {
@@ -567,7 +566,7 @@ public class Connection {
                     }
                 }
             }
-        });
+        });*/
     }
 
     private synchronized void closeSocketOutputStream() {
@@ -611,6 +610,10 @@ public class Connection {
                 .sendToTarget();
     }
 
+    public boolean isClosed() {
+        return mState == CONNECTION_STATE_CLOSEED || mToBeClosedReason < 0;
+    }
+
     private boolean isValidReason(int reason) {
         return reason <= 0;
     }
@@ -626,7 +629,7 @@ public class Connection {
         }
 
         if (!mIsDataSending) {
-            mToBeClosedReason = 100;
+            mToBeClosedReason = 0;
             mLastReasonCode = reason;
 
             closeSocket();

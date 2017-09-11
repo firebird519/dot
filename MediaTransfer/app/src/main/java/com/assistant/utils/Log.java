@@ -17,7 +17,7 @@ import java.util.Locale;
 public class Log {
     private static String TAG = "Log";
 
-    public static final boolean LOG_TO_FILE_FLAG = false;//Utils.DEBUG;
+    public static final boolean LOG_TO_FILE_FLAG = Utils.DEBUG_CONNECTION;
 
     private static final String DEBUG = "D";
     private static final String ERROR = "E";
@@ -30,8 +30,11 @@ public class Log {
 
     private static Date sDate = new Date();
 
-    public static void init(Context context) {
-        setLogPath(Log.getFilePath(context) + "/assistant_logs");
+    public static void init(String dir, Context context) {
+        if (TextUtils.isEmpty(dir)) {
+            dir = Log.getFilePath(context);
+        }
+        setLogPath(dir + "/assistant_logs");
     }
     /**
      * This function should be called once when this application start. Otherwise logs will not

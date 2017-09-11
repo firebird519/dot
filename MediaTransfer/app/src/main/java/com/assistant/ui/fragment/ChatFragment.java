@@ -24,6 +24,7 @@ import com.assistant.connection.ConnectionManager;
 import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
+import com.assistant.events.FileEvent;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.FileChooserActivity;
 import com.assistant.utils.Log;
@@ -59,6 +60,8 @@ public class ChatFragment extends Fragment {
 
     private ClientInfo mConnClientInfo;
     private List<Event> mChatMessageList;
+
+    private String mSelectedFilePathName;
 
     //2 mins, and 10s for test mode
     private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG_CONNECTION ? 10*1000 : 2*60*1000;
@@ -137,16 +140,22 @@ public class ChatFragment extends Fragment {
                 if (msg.length() > 0) {
                     mMsgEditText.setText("");
 
-                    ChatMessageEvent event =
-                            new ChatMessageEvent(msg,
-                                    System.currentTimeMillis(),
-                                    mConnId,
-                                    mConnClientInfo.clientUniqueId,
-                                    false);
+                    Log.d(this, "msg:" + msg);
+                    if (!TextUtils.isEmpty(mSelectedFilePathName)) {
+                        mMediaTransManager.sendFile(mConnId, mSelectedFilePathName, null);
+                        mSelectedFilePathName = "";
+                    } else {
+                        ChatMessageEvent event =
+                                new ChatMessageEvent(msg,
+                                        System.currentTimeMillis(),
+                                        mConnId,
+                                        mConnClientInfo.clientUniqueId,
+                                        false);
 
-                    mMediaTransManager.sendEvent(mConnId, event, null);
+                        mMediaTransManager.sendEvent(mConnId, event, null);
 
-                    mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
+                        mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
+                    }
                 }
 
             }
@@ -161,12 +170,13 @@ public class ChatFragment extends Fragment {
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
                 String filePathName = data.getStringExtra(EXTRA_FILE_CHOOSER);
+                mSelectedFilePathName = filePathName;
 
                 if (!TextUtils.isEmpty(filePathName)) {
-                    mMediaTransManager.sendFile(mConnId, filePathName);
-                } else {
-
+                    mMsgEditText.setText(getString(R.string.file) + mSelectedFilePathName);
                 }
+            } else {
+                mSelectedFilePathName = "";
             }
 
         } else {
@@ -292,6 +302,8 @@ public class ChatFragment extends Fragment {
                 String msg = "";
                 if (Event.EVENT_TYPE_CHAT == event.getEventType()) {
                     msg = ((ChatMessageEvent)event).message;
+                } else if (Event.EVENT_TYPE_FILE == event.getEventType()) {
+                    msg = getString(R.string.file) + ((FileEvent)event).fileName;
                 }
 
                 if (event.isReceived) {

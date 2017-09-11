@@ -5,6 +5,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.BatteryManager;
 import android.os.storage.StorageManager;
+import android.text.TextUtils;
+
+import com.assistant.MediaTransferApplication;
 
 import java.io.File;
 import java.util.regex.Matcher;
@@ -65,11 +68,14 @@ public class Utils {
     }
 
     public static String getAppStoragePath(Context context) {
-        String path = "";
-        File file = context.getFilesDir();
+        String path = MediaTransferApplication.getTempFileDir();
 
-        if (file != null) {
-            path = file.getAbsolutePath();
+        if (TextUtils.isEmpty(path)) {
+            File file = context.getFilesDir();
+
+            if (file != null) {
+                path = file.getAbsolutePath();
+            }
         }
 
         return path;

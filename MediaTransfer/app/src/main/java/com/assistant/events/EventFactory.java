@@ -31,14 +31,18 @@ public class EventFactory {
         return event;
     }
 
-    public static FileEvent generateFileEvent(String strFilePathName) {
+    public static FileEvent generateFileEvent(int connId, String strFilePathName) {
         File file = new File(strFilePathName);
 
-        if (file.exists()) {
-            file.lastModified();
-            
+        FileEvent event = null;
+        if (file.exists() && file.isFile()) {
+            event = new FileEvent(connId, strFilePathName, System.currentTimeMillis());
+
+            event.fileName = file.getName();
+            event.fileLastWriteTime = file.lastModified();
+            event.fileSize = file.length();
         }
 
-        return null;
+        return event;
     }
 }

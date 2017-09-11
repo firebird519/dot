@@ -12,7 +12,8 @@
         android:layout_alignParentRight="true"
         android:layout_margin="2dip"
         android:adjustViewBounds="true"
-        android:text="@string/back" />
+        android:text="@string/back"
+        android:visibility="gone"/>
 
     <TextView
         android:id="@+id/tvPath"
@@ -24,7 +25,8 @@
         android:layout_toLeftOf="@id/imgBackFolder"
         android:gravity="left"
         android:textColor="#FFA500"
-        android:textSize="16sp" />
+        android:textSize="16sp"
+        android:visibility="gone"/>
 
     <Button
         android:id="@+id/btExit"

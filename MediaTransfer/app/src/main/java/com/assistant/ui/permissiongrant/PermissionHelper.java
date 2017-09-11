@@ -23,7 +23,7 @@ public class PermissionHelper {
         return !mPermissionsChecker.lacksPermissions(PERMISSIONS);
     }
 
-    public boolean isWriteExternalStrogagePermissionGranted() {
+    public boolean isWriteExternalStoragePermissionGranted() {
         return !mPermissionsChecker.lacksPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,});
     }
 

@@ -60,6 +60,7 @@ public class ConnectionManager {
         int retryCount;
         int connId;
         int disconnectReason;
+        boolean isStopped = false;
 
         ReConnectRequest(int id, String ip, int connPort, int reason, int retryTimes, ConnectionCreationCallback cb) {
             connId = id;
@@ -159,7 +160,7 @@ public class ConnectionManager {
     private static final int EVENT_NOTIFY_CONNECTION_ADDED = 6;
     private static final int EVENT_NOTIFY_CONNECTION_REMOVED = 7;
 
-    private static final int CONNECTION_CREATION_TIMEOUT_TIMESTAMP = 70*1000; //60s
+    private static final int CONNECTION_CREATION_TIMEOUT_TIMESTAMP = 70*1000; //70s
     class ConnMgrThreadHandler extends Handler {
         public ConnMgrThreadHandler(Looper looper) {
             super(looper);
@@ -238,17 +239,18 @@ public class ConnectionManager {
             if (connection != null && !mConnections.containsValue(connection)) {
                 String ipAddress = connection.getIp();
 
+                removeReconnectRequest(connection.getId());
+
                 if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() <= 2)) {
                     Log.d(this, "handleConnectionAdded: ipAddress already connected!");
                     connection.close(Connection.CONNECTION_REASON_CODE_CONNECT_ALREADY_CONNECTED);
+
                     return;
                 }
 
                 // this maybe reconnect and conneciton id already existd
                 if (connection.getId() < 0) {
                     connection.setId(generateConnectionId());
-                } else {
-                    removeReconnectRequest(connection.getId());
                 }
 
                 connection.setWakeLock(
@@ -274,7 +276,10 @@ public class ConnectionManager {
     private void handleConnectionRemoved(Connection connection, int reason, boolean reconnectFailed) {
         Log.d(TAG, "handleConnectionRemoved, id:" + connection.getId() + ", ip:"
                 + connection.getIp() + ", reason:" + reason);
+        logReconnectReqeustList();
+
         logConnectionList();
+
         synchronized (mConnections) {
             if (mConnections.containsValue(connection)) {
                 mConnections.remove(connection.getId());
@@ -293,6 +298,8 @@ public class ConnectionManager {
                             .sendToTarget();
                 }
             } else if (reconnectFailed) {
+                removeReconnectRequest(connection.getId());
+
                 // connection reconnect failed. notify ui and do connection removed for tracker.
                 mDataTracker.onConnectionRemoved(connection);
                 mThreadHandler
@@ -462,6 +469,8 @@ public class ConnectionManager {
         Log.d(TAG, "handleReconnectRequest, request:" + request);
         if (mStopped) {
             Log.d(TAG, "handleReconnectRequest, mStopped is true");
+            removeReconnectRequest(request.connId);
+
             notifyConnectionCreationResult(null,
                     request.listener,
                     true,
@@ -481,8 +490,7 @@ public class ConnectionManager {
                 && !TextUtils.isEmpty(connection.getIp())
                 && connection.getReconnectCount() < MAX_RECONNECT_COUNT
                 && !connection.isHost()
-                && (reason == Connection.CONNECTION_REASON_CODE_IO_EXCEPTION
-                    || reason == Connection.CONNECTION_REASON_CODE_CONNECT_TIMEOUT)) {
+                && (reason == Connection.CONNECTION_REASON_CODE_IO_EXCEPTION)) {
             return true;
         }
 
@@ -503,6 +511,10 @@ public class ConnectionManager {
         mStopped = false;
 
         if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() < 2)) {
+            if (request != null) {
+                removeReconnectRequest(request.connId);
+            }
+
             notifyConnectionCreationResult(null,
                     listener,
                     true,
@@ -557,6 +569,7 @@ public class ConnectionManager {
             } else if (request != null) {
                 Log.d(TAG, "reconnect to create connection failed, notify connection disconnect.");
                 // notify connection removed for retry failed.
+                removeReconnectRequest(request.connId);
                 mThreadHandler
                         .obtainMessage(EVENT_NOTIFY_CONNECTION_REMOVED,
                                 connection.getId(), request.disconnectReason)
@@ -606,23 +619,27 @@ public class ConnectionManager {
     }
 
     public boolean isReconnecting(String ipAddress) {
+        logReconnectReqeustList();
+
         synchronized (mReconnectRequestList) {
             if (mReconnectRequestList.size() > 0) {
                 for (ReConnectRequest request : mReconnectRequestList) {
                     if (TextUtils.equals(ipAddress, request.ipAddress)) {
-                        Log.d(TAG, "isReconnecting, ip:" + ipAddress);
+                        Log.d(TAG, "isReconnecting, true forip:" + ipAddress);
                         return true;
                     }
                 }
             }
         }
 
-        Log.d(TAG, "isReconnecting ip not reconnecting:" + ipAddress);
+        Log.d(TAG, "isReconnecting, false for reconnecting:" + ipAddress);
 
         return false;
     }
 
     public boolean isReconnecting(int connId) {
+        logReconnectReqeustList();
+
         ReConnectRequest request = getReconnectRequest(connId);
 
         Log.d(TAG, "isReconnecting:" + (request != null));
@@ -630,6 +647,8 @@ public class ConnectionManager {
     }
 
     private void removeReconnectRequest(int connId) {
+        logReconnectReqeustList();
+
         Log.d(TAG, "removeReconnectRequest, connId:" + connId);
         ReConnectRequest request = getReconnectRequest(connId);
 

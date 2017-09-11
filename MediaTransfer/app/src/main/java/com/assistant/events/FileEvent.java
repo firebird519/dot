@@ -5,11 +5,12 @@ public class FileEvent extends Event {
     public transient String filePathName;
 
     public String fileName;
+    public long fileLastWriteTime;
+    public long fileSize;
+
     public int fileAttributes;
     public long fileCreateTime;
     public long fileLastAccessTime;
-    public long fileLastWriteTime;
-    public long fileSize;
     public int fileReserved1; // 0
 
     @Override
@@ -17,13 +18,16 @@ public class FileEvent extends Event {
         return EVENT_TYPE_FILE;
     }
 
-    public FileEvent(int connectionId, long curTime) {
+    public FileEvent(int connectionId, String pathName, long curTime) {
         super(connectionId, curTime);
+
+        filePathName = pathName;
     }
 
     @Override
     public String toString() {
         return "FileEvent - " + super.toString()
-                + ", filePathName:" + filePathName;
+                + ", fileName:" + fileName
+                + ", temp file:" + filePathName;
     }
 }

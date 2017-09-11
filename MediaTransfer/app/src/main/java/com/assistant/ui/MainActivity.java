@@ -22,6 +22,7 @@ import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.Toast;
 
+import com.assistant.MediaTransferApplication;
 import com.assistant.MediaTransferService;
 import com.assistant.connection.ConnectionCreationCallback;
 import com.assistant.datastorage.SharePreferencesHelper;
@@ -124,8 +125,6 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
         // permission grant
         if (!mPermissionHelper.isAllPermissionGranted()) {
             mPermissionHelper.startPermissionsActivity(this, PERMISSION_REQUEST_CODE);
-        } else {
-            Log.init(this);
         }
 
         Log.d(this, "onResume end");
@@ -446,6 +445,6 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
             return;
         }
 
-        Log.init(this);
+        MediaTransferApplication.writeExternalStoragePermissionGranted(getApplicationContext());
     }
 }

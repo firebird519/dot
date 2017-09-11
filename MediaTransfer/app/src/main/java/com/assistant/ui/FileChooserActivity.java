@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.view.KeyEvent;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.Window;
@@ -68,10 +69,14 @@ public class FileChooserActivity extends AppCompatActivity {
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.filechooser_show);
 
-        mSdcardRootPath = Environment.getExternalStorageDirectory().getAbsolutePath();// �õ�sdcardĿ¼
+        getSupportActionBar().setHomeButtonEnabled(true);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+
+        mSdcardRootPath = Environment.getExternalStorageDirectory().getAbsolutePath();
+
+        setTitle(mSdcardRootPath);
 
         mBackView = findViewById(R.id.imgBackFolder);
         mBackView.setOnClickListener(mClickListener);
@@ -86,6 +91,24 @@ public class FileChooserActivity extends AppCompatActivity {
         setGridViewAdapter(mSdcardRootPath);
     }
 
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        final int itemId = item.getItemId();
+        if (itemId == android.R.id.home) {  // See ActionBar#setDisplayHomeAsUpEnabled()
+            //onBackPressed();
+            backProcess();
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onBackPressed() {
+        //super.onBackPressed();
+        backProcess();
+    }
+
     private void setGridViewAdapter(String filePath) {
         updateFileItems(filePath);
         mAdatper = new FileChooserAdapter(this, mFileLists);
@@ -95,6 +118,8 @@ public class FileChooserActivity extends AppCompatActivity {
     private void updateFileItems(String filePath) {
         mLastFilePath = filePath;
         mTvPath.setText(mLastFilePath);
+
+        setTitle(mLastFilePath);
 
         if (mFileLists == null)
             mFileLists = new ArrayList<FileChooserAdapter.FileInfo>();

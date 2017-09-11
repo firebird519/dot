@@ -17,6 +17,7 @@ import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
+import com.assistant.events.EventFactory;
 import com.assistant.events.FileEvent;
 import com.assistant.utils.Log;
 
@@ -183,6 +184,23 @@ public class MediaTransferManager {
         mConnectionManager.sendEvent(request);
     }
 
+    public int sendFile(int connId, String filePathName,  EventSendResponse response) {
+        FileEvent event = EventFactory.generateFileEvent(connId, filePathName);
+
+        if (event != null) {
+            EventSendRequest request = new EventSendRequest(event, response);
+            recordEvent(connId, event);
+
+            mConnectionManager.sendEvent(request);
+
+            return 0;
+        }
+
+        Log.d(this, "sendFile, generateFileEvent failed!");
+
+        return -1;
+    }
+
     public int sendFile(int connId, String strFilePathName) {
         return 0;
     }
@@ -255,12 +273,12 @@ public class MediaTransferManager {
             case Event.EVENT_TYPE_CLIENTNAME:
                 handleClientInfoEvent(connId, (ClientInfo)event);
                 break;
+            case Event.EVENT_TYPE_FILE:
             case Event.EVENT_TYPE_CHAT:
                 recordEvent(connId, event);
                 notifyEventReceived(connId, event);
                 break;
-            case Event.EVENT_TYPE_FILE:
-                break;
+
             default:
                 break;
         }
