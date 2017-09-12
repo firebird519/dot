@@ -12,6 +12,7 @@ import android.support.v4.app.TaskStackBuilder;
 import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.MainActivity;
+import com.assistant.utils.Log;
 
 public class MediaTransferService extends Service {
 
@@ -69,6 +70,7 @@ public class MediaTransferService extends Service {
     }
 
     private void showForegroundNotification() {
+        Log.d(this, "showForegroundNotification");
         NotificationCompat.Builder builder =
                 new NotificationCompat.Builder(this)
                         .setSmallIcon(R.drawable.ic_launcher)
@@ -92,6 +94,8 @@ public class MediaTransferService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+
+        Log.d(this, "onDestroy");
 
         // send one receiver out and try to start process again.
         Intent intent = new Intent("com.assistant.mediatransfer.startreceiver");

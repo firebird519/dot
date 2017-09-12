@@ -23,6 +23,7 @@ import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
+import com.assistant.events.FileEvent;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.ChattingActivity;
 import com.assistant.ui.view.CircleIndicatorView;
@@ -421,6 +422,8 @@ public class ClientListFragment extends Fragment {
                 Event event = msgList.get(msgList.size() - 1);
                 if (event instanceof ChatMessageEvent) {
                     lastestMsg = ((ChatMessageEvent)event).message;
+                } else if (event instanceof FileEvent) {
+                    lastestMsg = getString(R.string.file) + ((FileEvent)event).fileName;
                 }
             }
         }

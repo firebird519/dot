@@ -30,6 +30,13 @@
     <string name="file">File:</string>
     <string name="send">Send</string>
 
+    <!-- chat List view option menu-->
+    <string name="chat_option_header">Select operation</string>
+    <string name="delete">Delete</string>
+    <string name="open">Open</string>
+    <string name="save_as">Save as</string>
+
+
     <string name="chat_input_view_hint">Input text...</string>
     <string name="chat_send_failed">message send failed, please try again...</string>
     <string name="no_messages">No Messages!</string>

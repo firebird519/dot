@@ -27,7 +27,7 @@ public class ConnectionFactory {
 
     public static Connection createConnection(String ip,
                                               int port,
-                                              final ConnectionManager.ReConnectRequest request,
+                                              final ConnectionManager.ConnectRequest request,
                                               Connection.ConnectionListener listener) {
         Connection conn = new Connection(null, false, request);
 

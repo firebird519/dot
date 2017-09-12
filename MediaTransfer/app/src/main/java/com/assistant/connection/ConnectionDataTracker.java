@@ -446,7 +446,7 @@ public class ConnectionDataTracker extends Handler {
 
                                         sentBytes += ret;
 
-                                        Log.e(TAG, "file sent:" + sentBytes);
+                                        Log.d(TAG, "file sent:" + sentBytes);
                                         notifySendProgress((sentBytes * 100) / fileLen);
                                     } else {
                                         Log.e(TAG, "file send error with reason:" + ret);
@@ -616,6 +616,7 @@ public class ConnectionDataTracker extends Handler {
                                         mConnection.getId(), 0, event)
                                         .sendToTarget();
                             } else if (event != null && event.eventType == Event.EVENT_TYPE_FILE) {
+                                Log.d(TAG, "waiting for file received:" + event.toString());
                                 mWaitingNetEvent = event;
                             } else {
                                 Log.e(this, "NetEvent parse failed. Ignored! data:"

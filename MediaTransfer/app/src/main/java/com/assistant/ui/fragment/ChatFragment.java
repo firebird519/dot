@@ -4,14 +4,18 @@ import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
+import android.view.ContextMenu;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -27,6 +31,7 @@ import com.assistant.events.Event;
 import com.assistant.events.FileEvent;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.FileChooserActivity;
+import com.assistant.utils.FileOpenIntentUtils;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
@@ -40,6 +45,11 @@ public class ChatFragment extends Fragment {
     private static final String TAG = "ChatFragment";
 
     private final static String INTENT_EXTRA_CONNECTION_INDEX = "extra_connection_index";
+
+    private static final int MENU_DELETE_ID = 0;
+    private static final int MENU_OPEN_ID = 1;
+    private static final int MENU_SEND_ID = 2;
+    private static final int MENU_SAVE_AS_ID = 3;
 
     private final static int FILE_CHOOSER_REQUEST_CODE = 1;
 
@@ -59,7 +69,7 @@ public class ChatFragment extends Fragment {
     private ConnectionManager mConnectionManager;
 
     private ClientInfo mConnClientInfo;
-    private List<Event> mChatMessageList;
+    private List<Event> mChatEventList;
 
     private String mSelectedFilePathName;
 
@@ -102,6 +112,20 @@ public class ChatFragment extends Fragment {
         return inflater.inflate(R.layout.chatting_layout, container, false);
     }
 
+    private void initListItemLongClickContextMenu(ContextMenu menu, Event event) {
+        menu.setHeaderTitle(R.string.chat_option_header);
+        menu.add(0, MENU_DELETE_ID, 0, R.string.delete);
+
+        if (event instanceof FileEvent) {
+            menu.add(0, MENU_OPEN_ID, 0, R.string.open);
+        }
+
+        if (false) {
+            menu.add(0, MENU_SEND_ID, 0, R.string.send);
+            menu.add(0, MENU_SAVE_AS_ID, 0, R.string.save_as);
+        }
+    }
+
     @Override
     public void onViewCreated(final View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -123,6 +147,19 @@ public class ChatFragment extends Fragment {
         Log.d(this, "onDialogViewCreated");
 
         mChattingListView = (ListView)view.findViewById(R.id.chatting_list_view);
+        mChattingListView.setOnCreateContextMenuListener(new View.OnCreateContextMenuListener() {
+            @Override
+            public void onCreateContextMenu(ContextMenu menu,
+                                            View v,
+                                            ContextMenu.ContextMenuInfo menuInfo) {
+                int position = ((AdapterView.AdapterContextMenuInfo)menuInfo).position;
+                Log.d(this, "onCreateContextMenu, position:" + position);
+
+                Event event = mChattingAdapter.getItem(position);
+                initListItemLongClickContextMenu(menu, event);
+            }
+        });
+
         mMsgEditText = (EditText)view.findViewById(R.id.msg_input_view);
         mFileChooseBtn = (ImageButton)view.findViewById(R.id.msg_file_choose_btn);
         mFileChooseBtn.setOnClickListener(new View.OnClickListener() {
@@ -153,16 +190,37 @@ public class ChatFragment extends Fragment {
                                         false);
 
                         mMediaTransManager.sendEvent(mConnId, event, null);
-
                         mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
                     }
                 }
-
             }
         });
 
         mChattingAdapter = new ChattingAdapter();
         mChattingListView.setAdapter(mChattingAdapter);
+    }
+
+    @Override
+    public boolean onContextItemSelected(MenuItem item) {
+        int position = ((AdapterView.AdapterContextMenuInfo)item.getMenuInfo()).position;
+
+        switch (item.getItemId()) {
+            case MENU_DELETE_ID:
+                mChattingAdapter.delete(position);
+                break;
+            case MENU_OPEN_ID:
+                mChattingAdapter.openFile(position);
+                break;
+            case MENU_SAVE_AS_ID:
+                mChattingAdapter.saveFileAs(position);
+                break;
+            case MENU_SEND_ID:
+                break;
+            default:
+                return super.onContextItemSelected(item);
+        }
+
+        return true;
     }
 
     @Override
@@ -184,6 +242,7 @@ public class ChatFragment extends Fragment {
         }
     }
 
+    // TODO: support select folder.
     private void showFileChooseActivity() {
         Intent intent = new Intent();
         intent.setClass(mContext, FileChooserActivity.class);
@@ -195,6 +254,7 @@ public class ChatFragment extends Fragment {
         SimpleDateFormat dateformat = new SimpleDateFormat("MM-dd HH:mm:ss");
         return dateformat.format(time);
     }
+
     private void init() {
         if (mMediaTransManager == null) {
             mConnectionManager = ConnectionManager.getInstance(mContext.getApplicationContext());
@@ -206,10 +266,10 @@ public class ChatFragment extends Fragment {
 
             mMediaTransManager = MediaTransferManager.getInstance(mContext.getApplicationContext());
 
-            mChatMessageList = mMediaTransManager.getMessageList(mConnId);
+            mChatEventList = mMediaTransManager.getMessageList(mConnId);
 
-            if (mChatMessageList != null) {
-                mChattingListView.setSelection(mChatMessageList.size() - 1);
+            if (mChatEventList != null) {
+                mChattingListView.setSelection(mChatEventList.size() - 1);
             }
 
             mHandler.sendEmptyMessage(EVENT_SCREEN_UPDATE);
@@ -229,7 +289,8 @@ public class ChatFragment extends Fragment {
                 }
 
                 @Override
-                public void onMessageReceived(int clientId, Event msg) {
+                public void onMessageReceived(int clientId, Event event) {
+                    Log.d(this, "onEventReceived:" + event);
                     mHandler.sendEmptyMessage(EVENT_LIST_UPDATE);
                 }
 
@@ -256,7 +317,7 @@ public class ChatFragment extends Fragment {
     private class ChattingAdapter extends BaseAdapter {
         @Override
         public int getCount() {
-            return mChatMessageList != null ? mChatMessageList.size() : 0;
+            return mChatEventList != null ? mChatEventList.size() : 0;
         }
 
         @Override
@@ -338,12 +399,42 @@ public class ChatFragment extends Fragment {
                 mChattingListView.setSelection(position);
             }
 
-
             return convertView;
         }
 
         public Event getItem(int position) {
-            return mChatMessageList != null ? mChatMessageList.get(position) : null;
+            int size = mChatEventList != null ? mChatEventList.size() : 0;
+
+
+            return (position >= 0 && 0 < size) ? mChatEventList.get(position) : null;
+        }
+
+        public void delete(int position) {
+            Event event = getItem(position);
+
+            if (event != null) {
+                mChatEventList.remove(event);
+            }
+
+            notifyDataSetChanged();
+        }
+
+        public void openFile(int position) {
+            Event event = getItem(position);
+
+            if (event instanceof FileEvent) {
+                String filePathName = ((FileEvent)event).filePathName;
+                Intent intent = FileOpenIntentUtils.getOpenFileActvityIntent(filePathName);
+
+                Log.d(this, "openFile:" + filePathName);
+                if (intent != null) {
+                    mContext.startActivity(intent);
+                }
+            }
+        }
+
+        public void saveFileAs(int position) {
+
         }
     }
 

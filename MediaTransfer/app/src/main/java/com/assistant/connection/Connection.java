@@ -93,7 +93,7 @@ public class Connection {
 
     private boolean mIsHost;
 
-    private ConnectionManager.ReConnectRequest mReconnectRequest;
+    private ConnectionManager.ConnectRequest mReconnectRequest;
 
     private boolean mIsDataSending;
     private boolean mIsDataReceiving;
@@ -137,7 +137,7 @@ public class Connection {
 
     public Connection(Socket socket,
                       boolean isHost,
-                      final ConnectionManager.ReConnectRequest request) {
+                      final ConnectionManager.ConnectRequest request) {
         mSocket = socket;
         mIsHost = isHost;
 
@@ -195,11 +195,11 @@ public class Connection {
         return mReconnectRequest != null ? mReconnectRequest.retryCount : 0;
     }
 
-    public void setReconnectRequest(ConnectionManager.ReConnectRequest request) {
+    public void setReconnectRequest(ConnectionManager.ConnectRequest request) {
         mReconnectRequest = request;
     }
 
-    public ConnectionManager.ReConnectRequest getReconnectRequest() {
+    public ConnectionManager.ConnectRequest getReconnectRequest() {
         return mReconnectRequest;
     }
 
