@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.BatteryManager;
+import android.os.PowerManager;
 import android.os.storage.StorageManager;
 import android.text.TextUtils;
 
@@ -107,6 +108,14 @@ public class Utils {
         }
 
         return builder.toString();
+    }
+
+    public static PowerManager.WakeLock createBackGroundWakeLock(Context context, String name) {
+        PowerManager pm = (PowerManager)context.getSystemService(
+                Context.POWER_SERVICE);
+        return pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                name);
     }
 
 }

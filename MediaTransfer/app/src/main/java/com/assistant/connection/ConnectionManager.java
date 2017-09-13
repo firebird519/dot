@@ -5,7 +5,6 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
-import android.os.PowerManager;
 import android.os.SystemClock;
 import android.text.TextUtils;
 
@@ -177,6 +176,7 @@ public class ConnectionManager {
                             msg.arg1, msg.arg2 == 1);
                     break;
                 case EVENT_NOTIFY_CONNECTION_ADDED:
+                    // TODO: add reconnect flag...
                     notifyConnectionAdded(msg.arg1);
                     break;
                 case EVENT_NOTIFY_CONNECTION_REMOVED:
@@ -238,7 +238,6 @@ public class ConnectionManager {
         synchronized (mConnections) {
             if (connection != null && !mConnections.containsValue(connection)) {
                 String ipAddress = connection.getIp();
-
                 removeConnectRequest(connection.getId());
 
                 if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() <= 2)) {
@@ -248,14 +247,20 @@ public class ConnectionManager {
                     return;
                 }
 
-                // this maybe reconnect and conneciton id already existd
+                boolean reConnected = false;
+
+                // this connection maybe reconnected and connection id already existd
                 if (connection.getId() < 0) {
                     connection.setId(generateConnectionId());
+                } else {
+                    reConnected = true;
                 }
 
-                connection.setWakeLock(
-                        generateNetworkWakeLock(String.valueOf(connection.getId()) + ":0"),
-                        generateNetworkWakeLock(String.valueOf(connection.getId()) + ":1"));
+                connection.setWakeLock(Utils.createBackGroundWakeLock(mContext,
+                                String.valueOf(connection.getId()) + ":send"),
+                        Utils.createBackGroundWakeLock(mContext,
+                                String.valueOf(connection.getId()) + ":receive"));
+
                 mConnections.put(connection.getId(), connection);
                 mDataTracker.onConnectionAdded(connection);
                 connection.startHeartBeat();
@@ -263,7 +268,8 @@ public class ConnectionManager {
                 connection.addListner(new ConnectionListenerImpl());
 
                 mThreadHandler
-                        .obtainMessage(EVENT_NOTIFY_CONNECTION_ADDED, connection.getId(), 0)
+                        .obtainMessage(EVENT_NOTIFY_CONNECTION_ADDED, connection.getId(),
+                                reConnected ? 1 : 0)
                         .sendToTarget();
 
                 Log.d(TAG, "handleConnectionAdded, ip added:" + connection.getIp());
@@ -546,8 +552,11 @@ public class ConnectionManager {
 
         Log.d(TAG, "connectToInternal ip:" + ipAddress + ", request:" + request);
 
-        final Connection connection =
-                ConnectionFactory.createConnection(ipAddress, port, request, new Connection.ConnectionListener() {
+        Connection connection =
+                ConnectionFactory.createConnection(ipAddress,
+                        port,
+                        request,
+                        new Connection.ConnectionListener() {
                     @Override
                     public void onConnected(Connection conn) {
                         Log.d(TAG, "connectToInternal, onConnected for " + conn.getIp()
@@ -573,28 +582,15 @@ public class ConnectionManager {
                     }
                 });
 
-        if (connection == null) {
-            Log.d(TAG, "connectToInternal ip:" + ipAddress + ", connection creation failed!");
-            if (request == null) {
-                notifyConnectionCreationResult(null,
-                        listener, false, Connection.CONNECTION_REASON_CODE_UNKNOWN);
-            } else if (request != null) {
-                Log.d(TAG, "reconnect to create connection failed, notify connection disconnect.");
-                // notify connection removed for retry failed.
-                removeConnectRequest(request.connId);
-                mThreadHandler
-                        .obtainMessage(EVENT_NOTIFY_CONNECTION_REMOVED,
-                                connection.getId(), request.disconnectReason)
-                        .sendToTarget();
-            } else {
-                // impossible case?
-                Log.d(TAG, "reconnect request is null");
-            }
+        if (connection != null) {
+            connection.setConnectRequest(request);
         } else {
-            if (listener != null) {
-                Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
-                mThreadHandler.sendMessageDelayed(msg, CONNECTION_CREATION_TIMEOUT_TIMESTAMP);
-            }
+            Log.e(TAG, "new connection failed...");
+        }
+
+        if (listener != null) {
+            Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
+            mThreadHandler.sendMessageDelayed(msg, CONNECTION_CREATION_TIMEOUT_TIMESTAMP);
         }
     }
 
@@ -790,7 +786,8 @@ public class ConnectionManager {
 
         final HostConnection hostConnection =
                 ConnectionFactory.createHostConnection(port,
-                        generateNetworkWakeLock("host:" + SystemClock.elapsedRealtime()),
+                        Utils.createBackGroundWakeLock(mContext,
+                                "host:" + SystemClock.elapsedRealtime()),
                         mHostListener);
 
         if (hostConnection != null) {
@@ -881,14 +878,6 @@ public class ConnectionManager {
 
             mSearchListeners.clear();
         }
-    }
-
-    private PowerManager.WakeLock generateNetworkWakeLock(String id) {
-        PowerManager pm = (PowerManager)mContext.getSystemService(
-                Context.POWER_SERVICE);
-        return pm.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "connection:" + id);
     }
 
     private void logConnectionList() {

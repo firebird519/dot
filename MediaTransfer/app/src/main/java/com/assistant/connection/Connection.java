@@ -9,10 +9,10 @@ import android.os.PowerManager;
 import android.text.TextUtils;
 
 import com.assistant.utils.Log;
-import com.assistant.utils.ThreadPool;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.SocketException;
@@ -71,7 +71,6 @@ public class Connection {
     public static final int CONNECTION_REASON_CODE_CONNECT_REQUEST_CANCELED = -23;
     public static final int CONNECTION_REASON_CODE_CONNECT_ALREADY_CONNECTED = -24;
 
-
     private int mLastReasonCode;
 
     public static final int CONNECTION_STATE_NOT_CONNECTED = 0;
@@ -93,16 +92,15 @@ public class Connection {
 
     private boolean mIsHost;
 
-    private ConnectionManager.ConnectRequest mReconnectRequest;
+    private ConnectionManager.ConnectRequest mConnectRequest;
 
     private boolean mIsDataSending;
     private boolean mIsDataReceiving;
 
-    private ThreadPool mThreadPool;
-
     private static final int HEART_BEAT_TIMESTAMP = 5*60*1000; //5 min
 
     private Handler mThreadHandler;
+    private Object mSendBlockObj = new Object();
     private PowerManager.WakeLock mSendWakeLock;
     private PowerManager.WakeLock mReceiveWakeLock;
     private static final long RECEIVE_WAKE_LOCK_TIMESTAMP = 1000; //2s
@@ -138,6 +136,8 @@ public class Connection {
     public Connection(Socket socket,
                       boolean isHost,
                       final ConnectionManager.ConnectRequest request) {
+        Log.d(TAG, "socket:" + socket + ", isHost:" + isHost + ", request:" + request);
+
         mSocket = socket;
         mIsHost = isHost;
 
@@ -149,11 +149,8 @@ public class Connection {
             mId = request.connId;
 
             TAG += ":" + mId;
-            mReconnectRequest = request;
+            mConnectRequest = request;
         }
-
-
-        mThreadPool = new ThreadPool(3);
 
         HandlerThread thread = new HandlerThread("connectionHandlerThread");
         thread.start();
@@ -172,6 +169,8 @@ public class Connection {
         } else {
             setState(CONNECTION_STATE_NOT_CONNECTED);
         }
+
+        Log.d(TAG, "init ended!");
     }
 
     public int getState() {
@@ -192,22 +191,53 @@ public class Connection {
     }
 
     public int getReconnectCount() {
-        return mReconnectRequest != null ? mReconnectRequest.retryCount : 0;
+        return mConnectRequest != null ? mConnectRequest.retryCount : 0;
     }
 
-    public void setReconnectRequest(ConnectionManager.ConnectRequest request) {
-        mReconnectRequest = request;
+    public void setConnectRequest(ConnectionManager.ConnectRequest request) {
+        mConnectRequest = request;
     }
 
     public ConnectionManager.ConnectRequest getReconnectRequest() {
-        return mReconnectRequest;
+        return mConnectRequest;
     }
-
 
     public void setWakeLock(PowerManager.WakeLock sendWakeLock,
                             PowerManager.WakeLock receiveWakeLock) {
         mSendWakeLock = sendWakeLock;
         mReceiveWakeLock = receiveWakeLock;
+    }
+
+    public void acquireSendWakeLock() {
+        if (mSendWakeLock != null && !mSendWakeLock.isHeld()) {
+            mSendWakeLock.acquire();
+        }
+    }
+
+    public void releaseSendWakeLock() {
+        if (mSendWakeLock != null && mSendWakeLock.isHeld()) {
+            mSendWakeLock.release();
+        }
+    }
+
+    public void waitDataSendEnded() {
+        if (mIsDataSending) {
+            try {
+                mSendBlockObj.wait();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void notifyDataSend() {
+        mSendBlockObj.notify();
+    }
+
+    public void acquireReceivWakeLock() {
+        if (mReceiveWakeLock != null && !mReceiveWakeLock.isHeld()) {
+            mReceiveWakeLock.acquire(RECEIVE_WAKE_LOCK_TIMESTAMP);
+        }
     }
 
     public void setId(final int id) {
@@ -240,7 +270,7 @@ public class Connection {
         mState = state;
 
         if (mState == CONNECTION_STATE_CONNECTED) {
-            mReconnectRequest = null;
+            mConnectRequest = null;
         }
     }
 
@@ -251,13 +281,8 @@ public class Connection {
         setState(Connection.CONNECTION_STATE_CONNECTING);
 
         Log.d(TAG, "Connection connect ip:" + ip + ", port:" + port);
-        mThreadPool.addTask(new Runnable() {
-            @Override
-            public void run() {
-                Log.d(TAG, "Connection connect ip:" + ip + " task running)");
-                createSocketAndNotify(ip, port);
-            }
-        });
+
+        createSocketAndNotify(ip, port);
     }
 
     /*
@@ -265,12 +290,7 @@ public class Connection {
      *
      * return: data size sent or failed code for sending.
      */
-    // TODO: consider how to handle sending in progress when calling this...
     public synchronized int send(final byte[] data, final long size) {
-        if (!mSendWakeLock.isHeld()) {
-            mSendWakeLock.acquire();
-        }
-
         if (Looper.myLooper() == Looper.getMainLooper()) {
             throw new NetworkOnMainThreadException();
         }
@@ -347,11 +367,114 @@ public class Connection {
             }
         }
 
-        if (mSendWakeLock.isHeld()) {
-            mSendWakeLock.release();
+        return result;
+    }
+
+    public synchronized int sendFile(final String filePathName) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            throw new NetworkOnMainThreadException();
+        }
+
+        Log.d(TAG, "send, mState:" + mState + ", mIsDataSending:" + mIsDataSending +
+                ",mSocketOutputStream:" + mSocketOutputStream);
+        if (mIsDataSending) {
+            return CONNECTION_REASON_CODE_SOCKET_SENDING;
+        }
+
+        if (mState != CONNECTION_STATE_CONNECTED) {
+            return CONNECTION_REASON_CODE_NOT_CONNECTED;
+        }
+
+        if (mSocketOutputStream == null) {
+            Log.d(this, "send, SocketOutputStream is not init.");
+
+            return CONNECTION_REASON_CODE_NOT_CONNECTED;
+        }
+
+        mIsDataSending = true;
+
+        FileInputStream fileInputStream;
+
+        int fileLen = 0;
+        int result = 0;
+        int sentBytes = 0;
+
+        try {
+            fileInputStream = new FileInputStream(filePathName);
+            fileLen = fileInputStream.available();
+
+            int bufferSize =
+                    fileLen > SOCKET_DEFAULT_BUF_SIZE ?
+                            SOCKET_DEFAULT_BUF_SIZE : fileLen;
+
+            byte[] buffer = new byte[bufferSize];
+            int bytesFileRead;
+
+            do {
+                bytesFileRead = fileInputStream.read(buffer, 0, bufferSize);
+
+                // to the end of the file
+                if (bytesFileRead <= 0) {
+                    break;
+                }
+
+                synchronized (mSocketOutputStreamLock) {
+                    if (mSocketOutputStream != null) {
+                        mSocketOutputStream.write(buffer, 0, bytesFileRead);
+                    } else {
+                        Log.d(this, "send, SocketOutputStream is not init.");
+                        result = CONNECTION_REASON_CODE_OUT_STREAM_CLOSED;
+                        break;
+                    }
+                }
+
+                Log.d(this, "send, sentBytes:" + sentBytes +
+                        ", countNotSend:" + (fileLen - sentBytes));
+
+
+                sentBytes += bytesFileRead;
+
+                if (isValidReason(mToBeClosedReason)) {
+                    Log.d(this, "connection is requested to be closed:"
+                            + mToBeClosedReason
+                            + ", sentBytes:" + sentBytes);
+                    break;
+                }
+            } while (sentBytes < fileLen);
+
+            synchronized (mSocketOutputStreamLock) {
+                if (mSocketOutputStream != null) {
+                    mSocketOutputStream.flush();
+
+                    // ignore previous heart beat event which only needed if there is no data traffic.
+                    startHeartBeat();
+                }
+            }
+        } catch (Exception ioe) {
+            ioe.printStackTrace();
+
+            closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
+            result = CONNECTION_REASON_CODE_IO_EXCEPTION;
+        }
+
+        mIsDataSending = false;
+        Log.d(TAG, "send, result:" + result);
+
+        if (isValidReason(mToBeClosedReason)) {
+            closeInteranl(mToBeClosedReason);
+
+            if (fileLen != sentBytes) {
+                result = mToBeClosedReason;
+            }
+        } else {
+            result = sentBytes;
         }
 
         return result;
+    }
+
+    public boolean isDataSending() {
+        return mIsDataSending;
     }
 
     /*
@@ -409,9 +532,7 @@ public class Connection {
 
             try {
                 receivedEverytime = mSocketInputStream.read(buf, receivedCount, (int) bufSize - receivedCount);
-                if (!mReceiveWakeLock.isHeld()) {
-                    mReceiveWakeLock.acquire(RECEIVE_WAKE_LOCK_TIMESTAMP);
-                }
+                acquireReceivWakeLock();
             } catch (IOException e) {
                 e.printStackTrace();
 
@@ -634,6 +755,13 @@ public class Connection {
 
             closeSocket();
 
+            // to avoid any thread is blocking...
+            mSendBlockObj.notifyAll();
+
+            if (mSendWakeLock != null && mSendWakeLock.isHeld()) {
+                mSendWakeLock.release();
+            }
+
             setState(CONNECTION_STATE_CLOSEED);
             notifyClosed(reason);
         } else {
@@ -658,7 +786,7 @@ public class Connection {
     }
 
     public static int ConnectionFailedReasonToResponseFailedCode(int failedReason) {
-        int result = EventSendResponse.FAILED_CONNECTION_CLOSED;
+        int result = failedReason;
 
         switch (failedReason) {
             case CONNECTION_REASON_CODE_CONNECT_UNKNOWN_HOST:

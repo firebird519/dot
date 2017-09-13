@@ -1,0 +1,55 @@
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="app_name">MediaTransfer</string>
+
+    <string name="quit">退出</string>
+    <string name="back">返回</string>
+    <string name="connecting">连接中</string>
+    <string name="ip_input_value_error">请输入正确的ip地址和端口号！</string>
+    <string name="ip_connect_success">IP <xliff:g id="ip">%s</xliff:g> 连接成功!</string>
+    <string name="ip_connect_failed">IP <xliff:g id="ip">%s</xliff:g> 连接失败!</string>
+
+    <string name="action_settings">设置</string>
+    <string name="action_connectto">连接到</string>
+
+    <string name="settings_title">设置</string>
+
+    <string name="settings_client_name">名称</string>
+
+    <string name="alert_dialog_ok">是</string>
+    <string name="alert_dialog_cancel">否</string>
+
+    <string name="media_transfer_off_dialog_title">所有网络连接将断开.\n确定关闭吗？</string>
+
+    <string name="searching">搜索中...</string>
+
+    <string name="unknown">未知</string>
+
+    <string name="drawer_open">打开</string>
+    <string name="drawer_close">关闭</string>
+
+    <string name="file">文件:</string>
+    <string name="send">发送</string>
+
+    <!-- chat List view option menu-->
+    <string name="chat_option_header">选择操作</string>
+    <string name="delete">删除</string>
+    <string name="open">打开</string>
+    <string name="save_as">另存到</string>
+
+
+    <string name="chat_input_view_hint">输入信息...</string>
+    <string name="chat_send_failed">信息发送失败,请重试...</string>
+    <string name="no_messages">没有信息！</string>
+
+    <string name="empty_hint">当前目录为空</string>
+    <string name="open_file_error_format">文件格式错误</string>
+    <string name="open_file_none">"你没有选择文件"</string>
+
+    <!-- permission strings-->
+    <string name="settings">设置</string>
+    <string name="help">帮助</string>
+    <string name="string_help_text">当前应用缺少权限.</string>
+
+    <!-- notification strings-->
+    <string name="notification_keepalive_text">当前应用正在后台运行。\n 不要强行关闭应用，否则你会收不到任何信息！</string>
+</resources>

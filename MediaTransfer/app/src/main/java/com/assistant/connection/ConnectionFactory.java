@@ -29,48 +29,26 @@ public class ConnectionFactory {
                                               int port,
                                               final ConnectionManager.ConnectRequest request,
                                               Connection.ConnectionListener listener) {
-        Connection conn = new Connection(null, false, request);
+        Log.d(TAG, "createConnection0:" + ip);
+        Connection conn = null;
+        try {
+            conn = new Connection(null, false, request);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        Log.d(TAG, "createConnection1:" + ip);
 
         if (conn != null) {
             if (listener != null) {
                 conn.addListner(listener);
             }
 
+            Log.d(TAG, "createConnection:" + ip);
+
             conn.connect(ip, port);
-        }
-
-        return conn;
-    }
-
-    private static Socket createSocket(String ip, int port) {
-        Socket socket = null;
-
-        try {
-            Log.d(TAG, "createSocket:" + ip + ", port:" + port);
-            socket = SocketFactory.getDefault().createSocket(ip, port);
-
-            socket.setKeepAlive(true);
-        } catch (UnknownHostException e) {
-            //e.printStackTrace();
-            Log.d(TAG, "UnknownHost for ip:" + ip);
-        } catch (IOException e) {
-            Log.d(TAG, "IOException, io exception for ip:" + ip);
-            //e.printStackTrace();
-        } catch (Exception e) {
-            //e.printStackTrace();
-            Log.d(TAG, "Exception, exception for ip:" + ip + ", msg:" + e.getMessage());
-        }
-
-        return socket;
-    }
-
-    public static Connection createConnectionSync(String ip, int port) {
-        Log.d(TAG, "createConnectionSync:" + ip + ", port:" + port);
-        Socket socket = createSocket(ip, port);
-
-        Connection conn = null;
-        if (socket != null && socket.isConnected()) {
-            conn = new Connection(socket, false);
+        } else {
+            Log.e(TAG, "WARNING: new Connection failed for ip:" + ip);
         }
 
         return conn;
