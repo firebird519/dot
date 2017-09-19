@@ -231,7 +231,7 @@ public class ChatFragment extends Fragment {
                 mSelectedFilePathName = filePathName;
 
                 if (!TextUtils.isEmpty(filePathName)) {
-                    mMsgEditText.setText(getString(R.string.file) + mSelectedFilePathName);
+                    mMsgEditText.setText(mContext.getString(R.string.file) + mSelectedFilePathName);
                 }
             } else {
                 mSelectedFilePathName = "";
@@ -364,7 +364,7 @@ public class ChatFragment extends Fragment {
                 if (Event.EVENT_TYPE_CHAT == event.getEventType()) {
                     msg = ((ChatMessageEvent)event).message;
                 } else if (Event.EVENT_TYPE_FILE == event.getEventType()) {
-                    msg = getString(R.string.file) + ((FileEvent)event).fileName;
+                    msg = mContext.getString(R.string.file) + ((FileEvent)event).fileName;
                 }
 
                 if (event.isReceived) {

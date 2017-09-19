@@ -304,7 +304,7 @@ public class ClientListFragment extends Fragment {
                 holder = (ViewHolder) convertView.getTag();
             }
 
-            String name = getString(R.string.unknown);
+            String name = mActivity.getString(R.string.unknown);
             synchronized (mClintInfos) {
                 ClientInfoItem item = (ClientInfoItem) getItem(position);
 
@@ -382,7 +382,7 @@ public class ClientListFragment extends Fragment {
                 if (event instanceof ChatMessageEvent) {
                     lastestMsg = ((ChatMessageEvent)event).message;
                 } else if (event instanceof FileEvent) {
-                    lastestMsg = getString(R.string.file) + ((FileEvent)event).fileName;
+                    lastestMsg = mActivity.getString(R.string.file) + ((FileEvent)event).fileName;
                 }
             }
         }

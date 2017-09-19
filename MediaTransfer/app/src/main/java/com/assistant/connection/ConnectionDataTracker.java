@@ -259,11 +259,34 @@ public class ConnectionDataTracker extends Handler {
         }
 
         if (event instanceof FileEvent) {
-            ((FileEvent)event).filePathName = strFilePathName;
+            renameTempFile((FileEvent)event, strFilePathName);
+            //((FileEvent)event).filePathName = strFilePathName;
         }
 
         verifyEvent(connId, netEvent.eventType, netEvent.eventId);
         notifyEventReceived(connId, event);
+    }
+
+    private void renameTempFile(FileEvent event, String filePathName) {
+        String newFileName = filePathName + "_" + event.fileName;
+
+        File newFile = new File(newFileName);
+
+
+        int index = 1;
+        while (newFile.exists()) {
+            newFileName = filePathName + "_" + index + "_" + event.fileName;
+            newFile = new File(newFileName);
+            index++;
+        }
+
+        File file = new File(filePathName);
+
+        if (file.exists()) {
+            file.renameTo(newFile);
+        }
+
+        event.filePathName = newFileName;
     }
 
     private void verifyEvent(int connId, int eventType, long eventId) {
