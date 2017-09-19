@@ -8,7 +8,7 @@ import android.view.MenuItem;
 import com.assistant.R;
 import com.assistant.utils.Log;
 
-public class ChattingActivity extends AppCompatActivity {
+public class ChattingActivity extends BaseAppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

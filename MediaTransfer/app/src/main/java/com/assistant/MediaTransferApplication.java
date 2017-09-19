@@ -1,30 +1,67 @@
 package com.assistant;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.os.SystemClock;
+import android.text.TextUtils;
 
+import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.permissiongrant.PermissionHelper;
 import com.assistant.utils.Log;
 
 import java.io.File;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 public class MediaTransferApplication extends Application {
     private static final String TAG = "MediaTransferApplication";
+    private static MediaTransferApplication sApp;
 
     public static final String TEMP_FILE_DIR = "mediatransfer";
 
     private static String sTempFileDir = "";
 
     private PermissionHelper mPermissionHelper;
+
+    private Set<Activity> mResumedActivity =
+            Collections.synchronizedSet(new HashSet<Activity>(3));
+    private boolean mAppPaused = false;
+
+    private static final int APP_PAUSED_CHECK_TIMESTAMP = 5 * 1000;
+    private static final int EVENT_ACTIVITY_PAUSED = 0;
+
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case EVENT_ACTIVITY_PAUSED:
+                    handleActivityPaused();
+                    break;
+                default:
+                    break;
+            }
+            super.handleMessage(msg);
+        }
+    };
+
+    public static MediaTransferApplication getInstance() {
+        return sApp;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
 
+        sApp = this;
+
         mPermissionHelper = new PermissionHelper(getApplicationContext());
         if (mPermissionHelper.isWriteExternalStoragePermissionGranted()) {
-            writeExternalStoragePermissionGranted(getApplicationContext());
+            onWriteExtStoragePermissionGranted(getApplicationContext());
         }
 
         Log.d(this, "onCreate createTime:" + SystemClock.elapsedRealtime());
@@ -34,7 +71,40 @@ public class MediaTransferApplication extends Application {
         // TODO: to add monitor process/job schedule to keep this process keep alive?
     }
 
-    public static void writeExternalStoragePermissionGranted(Context context) {
+    public void onActivityResumed(Activity activity) {
+        Log.d(this, "onActivityResumed, activityName:"
+                + activity.getClass().getSimpleName());
+        if (activity != null
+                && !mResumedActivity.contains(activity)) {
+            mResumedActivity.add(activity);
+        }
+
+        Log.d(this, "onActivityResumed, mAppPaused:" + mAppPaused);
+
+        if (mAppPaused) {
+            MediaTransferManager mediaTransferManager = MediaTransferManager.getInstance(
+                    getApplicationContext());
+
+            mediaTransferManager.startSearchHost(null);
+        }
+    }
+
+    public void onActivityPaused(Activity activity) {
+        Log.d(this, "onActivityPaused, activityName:"
+                + activity.getClass().getSimpleName());
+        mResumedActivity.remove(activity);
+
+        mHandler.sendEmptyMessageDelayed(EVENT_ACTIVITY_PAUSED, APP_PAUSED_CHECK_TIMESTAMP);
+    }
+
+    private void handleActivityPaused() {
+        if (mResumedActivity.size() == 0) {
+            Log.d(this, "handleActivityPaused, app paused");
+            mAppPaused = true;
+        }
+    }
+
+    public void onWriteExtStoragePermissionGranted(Context context) {
         String path;
         if (Environment.MEDIA_MOUNTED.equals(Environment.MEDIA_MOUNTED)
                 || !Environment.isExternalStorageRemovable()) {//如果外部储存可用
@@ -59,7 +129,7 @@ public class MediaTransferApplication extends Application {
         Log.init(path, context);
     }
 
-    public static String getTempFileDir() {
+    public String getTempFileDir() {
         return sTempFileDir;
     }
 }

@@ -23,7 +23,7 @@ import java.util.ArrayList;
 
 import com.assistant.ui.FileChooserAdapter.FileInfo;
 
-public class FileChooserActivity extends AppCompatActivity {
+public class FileChooserActivity extends BaseAppCompatActivity {
     public static final String EXTRA_FILE_CHOOSER = "file_chooser";
 
     private GridView mGridView;

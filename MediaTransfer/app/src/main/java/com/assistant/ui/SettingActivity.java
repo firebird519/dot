@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 
+import com.assistant.MediaTransferApplication;
 import com.assistant.R;
 import com.assistant.datastorage.SharePreferencesHelper;
 
@@ -40,9 +41,18 @@ public class SettingActivity extends PreferenceActivity
 
     @Override
     protected void onResume() {
+        super.onResume();
+
         updatePreferences();
 
-        super.onResume();
+        MediaTransferApplication.getInstance().onActivityResumed(this);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        MediaTransferApplication.getInstance().onActivityPaused(this);
     }
 
     @Override

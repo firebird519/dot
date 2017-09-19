@@ -69,7 +69,7 @@ public class Utils {
     }
 
     public static String getAppStoragePath(Context context) {
-        String path = MediaTransferApplication.getTempFileDir();
+        String path = MediaTransferApplication.getInstance().getTempFileDir();
 
         if (TextUtils.isEmpty(path)) {
             File file = context.getFilesDir();

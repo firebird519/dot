@@ -55,7 +55,6 @@ public class ClientListFragment extends Fragment {
 
     private static final int EVENT_CANCEL_INDICATION = 0;
     private static final int EVENT_CONNECTION_LIST_UPDATED = 1;
-    private static final int EVENT_SEARCH_CONNECTION = 2;
 
     private Handler mHandler = new Handler(Looper.getMainLooper()) {
         @Override
@@ -66,9 +65,6 @@ public class ClientListFragment extends Fragment {
                     break;
                 case EVENT_CONNECTION_LIST_UPDATED:
                     mClientListAdapter.updateClientInfo();
-                    break;
-                case EVENT_SEARCH_CONNECTION:
-                    handleConnectionSearchEvent();
                     break;
                 default:
                     break;
@@ -112,16 +108,6 @@ public class ClientListFragment extends Fragment {
             }
         });
         Log.d(this, "onViewCreated end");
-    }
-
-    private boolean isNetworkSettingsOn() {
-        boolean isOn = false;
-
-        if (mSharePreferencesHelper != null) {
-            isOn = mSharePreferencesHelper.getInt(SharePreferencesHelper.SP_KEY_NETWORK_ON, 1) == 1;
-        }
-
-        return isOn;
     }
 
     @Override
@@ -172,7 +158,6 @@ public class ClientListFragment extends Fragment {
         Log.d(this, "onResume start");
         super.onResume();
 
-        mHandler.sendEmptyMessage(EVENT_SEARCH_CONNECTION);
         updateClientListView();
         Log.d(this, "onResume end");
     }
@@ -201,32 +186,6 @@ public class ClientListFragment extends Fragment {
         }
     }
 
-    private void handleConnectionSearchEvent() {
-        Log.d(this, "handleConnectionSearchEvent");
-        if (isNetworkSettingsOn()) {
-            mMediaTransferManager.startListen();
-
-            showIndicatorText(R.string.searching);
-            mMediaTransferManager.startSearchHost(
-                    new ConnectionManager.SearchListener() {
-                        @Override
-                        public void onSearchCompleted() {
-                            Log.d(this, "onSearchCompleted");
-                            if (!mHandler.hasMessages(EVENT_CANCEL_INDICATION)) {
-                                mHandler.sendEmptyMessageDelayed(EVENT_CANCEL_INDICATION, 200);
-                            }
-                        }
-
-                        @Override
-                        public void onSearchCanceled(int reason) {
-                            Log.d(this, "onSearchCanceled");
-                            if (!mHandler.hasMessages(EVENT_CANCEL_INDICATION)) {
-                                mHandler.sendEmptyMessageDelayed(EVENT_CANCEL_INDICATION, 200);
-                            }
-                        }
-                    });
-        }
-    }
     class ClientListAdapter extends BaseAdapter {
         private List<ClientInfoItem> mClintInfos =
                 Collections.synchronizedList(new ArrayList<ClientInfoItem>(5));

@@ -1,7 +1,5 @@
 package com.assistant.ui;
 
-import android.Manifest;
-import android.app.Activity;
 import android.app.DialogFragment;
 import android.app.FragmentManager;
 import android.app.ProgressDialog;
@@ -39,7 +37,7 @@ import com.assistant.ui.permissiongrant.PermissionsActivity;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
-public class MainActivity extends AppCompatActivity implements AlertDialogFragment.AlertDialogClickListener {
+public class MainActivity extends BaseAppCompatActivity implements AlertDialogFragment.AlertDialogClickListener {
     private static final int DIALOG_ONOFF_ALERT = 0;
     private static final int DIALOG_IP_INOUT = 1;
 
@@ -445,6 +443,7 @@ public class MainActivity extends AppCompatActivity implements AlertDialogFragme
             return;
         }
 
-        MediaTransferApplication.writeExternalStoragePermissionGranted(getApplicationContext());
+        MediaTransferApplication.getInstance().
+                onWriteExtStoragePermissionGranted(getApplicationContext());
     }
 }

@@ -362,6 +362,15 @@ public class MediaTransferManager {
         Log.d(this, "mConnectionIds:" + builder.toString());
     }
 
+    public boolean isNetworkSettingsOn() {
+        boolean isOn = false;
+
+        if (mSharePreferencesHelper != null) {
+            isOn = mSharePreferencesHelper.getInt(SharePreferencesHelper.SP_KEY_NETWORK_ON, 1) == 1;
+        }
+
+        return isOn;
+    }
 
     public void connectTo(String ipAddress, int port, ConnectionCreationCallback listener) {
         mConnectionManager.connectTo(ipAddress, port, listener);
@@ -386,7 +395,7 @@ public class MediaTransferManager {
         Log.d(this, "startSearchHost, ip:" + ip
                 + ", wifi connected:" + networkInfoManager.isWifiConnected()
                 + ", listener:" + listener);
-        if (!TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected()) {
+        if (!TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected() && isNetworkSettingsOn()) {
             mConnectionManager.searchHost(ip, mPort, listener);
         } else {
             if (listener != null) {
