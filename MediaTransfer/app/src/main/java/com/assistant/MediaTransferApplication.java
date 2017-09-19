@@ -7,8 +7,8 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
-import android.text.TextUtils;
 
+import com.assistant.connection.HostSearchHandler;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.permissiongrant.PermissionHelper;
 import com.assistant.utils.Log;
@@ -31,6 +31,7 @@ public class MediaTransferApplication extends Application {
     private Set<Activity> mResumedActivity =
             Collections.synchronizedSet(new HashSet<Activity>(3));
     private boolean mAppPaused = false;
+    private boolean mAppQuit = false;
 
     private static final int APP_PAUSED_CHECK_TIMESTAMP = 5 * 1000;
     private static final int EVENT_ACTIVITY_PAUSED = 0;
@@ -74,6 +75,8 @@ public class MediaTransferApplication extends Application {
     public void onActivityResumed(Activity activity) {
         Log.d(this, "onActivityResumed, activityName:"
                 + activity.getClass().getSimpleName());
+        mAppQuit = false;
+
         if (activity != null
                 && !mResumedActivity.contains(activity)) {
             mResumedActivity.add(activity);
@@ -94,7 +97,9 @@ public class MediaTransferApplication extends Application {
                 + activity.getClass().getSimpleName());
         mResumedActivity.remove(activity);
 
-        mHandler.sendEmptyMessageDelayed(EVENT_ACTIVITY_PAUSED, APP_PAUSED_CHECK_TIMESTAMP);
+        if (!mAppQuit) {
+            mHandler.sendEmptyMessageDelayed(EVENT_ACTIVITY_PAUSED, APP_PAUSED_CHECK_TIMESTAMP);
+        }
     }
 
     private void handleActivityPaused() {
@@ -102,6 +107,35 @@ public class MediaTransferApplication extends Application {
             Log.d(this, "handleActivityPaused, app paused");
             mAppPaused = true;
         }
+    }
+
+    public boolean isQuited() {
+        return mAppQuit;
+    }
+
+    public void quit() {
+        quit(true);
+    }
+
+    // only designed to be used by MediaTransferService
+    public void quit(boolean stopService) {
+        MediaTransferManager mediaTransferManager = MediaTransferManager.getInstance(
+                getApplicationContext());
+
+        mAppQuit = true;
+
+        HostSearchHandler.getInstance(getApplicationContext())
+                .stopSearch(HostSearchHandler.SERVER_SEARCH_CANCELED);
+
+        if (stopService) {
+            MediaTransferService.startServiceForQuit(getApplicationContext());
+        }
+
+        for(Activity activity : mResumedActivity) {
+            activity.finish();
+        }
+
+        mediaTransferManager.disconnectAllConnections();
     }
 
     public void onWriteExtStoragePermissionGranted(Context context) {

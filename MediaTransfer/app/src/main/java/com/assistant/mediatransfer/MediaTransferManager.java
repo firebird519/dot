@@ -404,7 +404,7 @@ public class MediaTransferManager {
         }
     }
 
-    public void stopAllConnections() {
+    public void disconnectAllConnections() {
         mConnectionManager.stopAllConnections();
     }
 

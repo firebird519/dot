@@ -6,7 +6,6 @@ import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.Message;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
 import android.text.InputFilter;
@@ -148,6 +147,8 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
                     R.layout.ip_input_dialog_layout);
         } else if (itemId == R.id.action_settings) {
             showSettingActivity();
+        } else if (itemId == R.id.action_quit) {
+            MediaTransferApplication.getInstance().quit();
         }
 
         return super.onOptionsItemSelected(item);
@@ -286,7 +287,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
         switch (dialogId) {
             case DIALOG_ONOFF_ALERT:
                 mSharePreferencesHelper.save(SharePreferencesHelper.SP_KEY_NETWORK_ON, 0);
-                mMediaTransferManager.stopAllConnections();
+                mMediaTransferManager.disconnectAllConnections();
                 break;
             case DIALOG_IP_INOUT:
                 handleIpInput(view);

@@ -17,6 +17,8 @@ import com.assistant.utils.Log;
 public class MediaTransferService extends Service {
 
     private static final String NETWORK_SEARCH_EXTRA = "network_search";
+    private static final String QUIT_EXTRA = "quit_flags";
+
     private MediaTransferManager mMediaTransferManager;
 
     @Nullable
@@ -32,9 +34,23 @@ public class MediaTransferService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        flags = START_STICKY;
+        if (intent != null && intent.hasExtra(QUIT_EXTRA)) {
+            Log.d(this, "has quit extra, remove stick flag and stop self");
+            flags = 0;
 
-        tryStartListenAndSearch(intent);
+            stopSelf();
+
+            MediaTransferApplication.getInstance().quit(false);
+            System.exit(0);
+        } else {
+            flags = START_STICKY;
+
+            // to keep service in foreground to avoid be killed.
+            // and don't start service when network is off.
+            showForegroundNotification();
+
+            tryStartListenAndSearch(intent);
+        }
 
         return super.onStartCommand(intent, flags, startId);
     }
@@ -52,10 +68,6 @@ public class MediaTransferService extends Service {
             mMediaTransferManager.startListen();
 
             mMediaTransferManager.startSearchHost(null);
-
-            // to keep service in foreground to avoid be killed.
-            // and don't start service when network is off.
-            showForegroundNotification();
         }
     }
 
@@ -66,6 +78,16 @@ public class MediaTransferService extends Service {
     public static void startService(Context context, boolean startSearch) {
         Intent intent = new Intent(context, MediaTransferService.class);
         intent.putExtra(NETWORK_SEARCH_EXTRA, startSearch);
+        context.startService(intent);
+    }
+
+    /*
+    * To remove stick flag for this service to avoid it restarted after process ended!
+    *
+    */
+    public static void startServiceForQuit(Context context) {
+        Intent intent = new Intent(context, MediaTransferService.class);
+        intent.putExtra(QUIT_EXTRA, "1");
         context.startService(intent);
     }
 
@@ -97,10 +119,12 @@ public class MediaTransferService extends Service {
 
         Log.d(this, "onDestroy");
 
-        // send one receiver out and try to start process again.
-        Intent intent = new Intent("com.assistant.mediatransfer.startreceiver");
-        sendBroadcast(intent);
-
         stopForeground(true);
+
+        if (!MediaTransferApplication.getInstance().isQuited()) {
+            // send one receiver out and try to start process again.
+            Intent intent = new Intent("com.assistant.mediatransfer.startreceiver");
+            sendBroadcast(intent);
+        }
     }
 }

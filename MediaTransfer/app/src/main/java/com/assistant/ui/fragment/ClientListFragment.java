@@ -232,6 +232,11 @@ public class ClientListFragment extends Fragment {
                     Log.d(this, "updateClientInfo, mMediaTransferManager not init");
                     return;
                 }
+
+                if (!ClientListFragment.this.isVisible()) {
+                    Log.d(this, "updateClientInfo, mMediaTransferManager not init");
+                    return;
+                }
                 List<Integer> connIdList = mMediaTransferManager.getConnectionIds();
 
                 Log.d(this, "updateClientInfo, connIdList size:"

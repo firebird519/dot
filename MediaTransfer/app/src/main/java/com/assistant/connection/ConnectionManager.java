@@ -377,7 +377,7 @@ public class ConnectionManager {
     }
 
     public void stopAllConnections() {
-        Log.d(TAG, "stopAllConnections");
+        Log.d(TAG, "disconnectAllConnections");
         mStopped = true;
 
         HostSearchHandler.getInstance(mContext).stopSearch(SERVER_SEARCH_CANCELED);
