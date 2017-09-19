@@ -229,9 +229,7 @@ public class ConnectionDataTracker extends Handler {
             Log.d(TAG, "processNextRequest, connId:" + request.event.connId
                     + ", queue size:" + queue.size());
 
-            if (!hasToBeVerifiedRequest(connId)) {
-                obtainMessage(EVENT_SEND_NETEVENT, request).sendToTarget();
-            }
+            obtainMessage(EVENT_SEND_NETEVENT, request).sendToTarget();
         }
     }
 
@@ -405,8 +403,7 @@ public class ConnectionDataTracker extends Handler {
             Log.d(TAG, "EventSendRunnable, conn:" + conn + ", bytesLen:" + bytesLen);
 
             if (conn != null) {
-                Log.d(TAG, "EventSendRunnable, filePathName:" + filePathName);
-                conn.waitDataSendEnded();
+                 Log.d(TAG, "EventSendRunnable, sending request:" + mRequest.toString());
 
                 conn.acquireSendWakeLock();
                 if (TextUtils.isEmpty(filePathName)) {
@@ -417,17 +414,17 @@ public class ConnectionDataTracker extends Handler {
                     ret = conn.send(header, ConnectionManager.DATA_HEADER_LEN_v1);
 
                     if (ret == ConnectionManager.DATA_HEADER_LEN_v1) {
+                        Log.d(TAG, "EventSendRunnable, send json:" + bytesLen);
                         ret = conn.send(bytes, bytesLen);
 
                         if (ret == bytesLen) {
                             success = true;
+                            mRequest.responseProgress(100);
                         }
                     }
 
                     Log.d(TAG, "EventSendRunnable, send ret:" + ret);
 
-                    mRequest.responseProgress(100);
-                    responseSendResult(success, 0, ret);
                 } else {
                     Log.d(TAG, "EventSendRunnable, send file:" + filePathName);
                     FileInputStream fileInputStream;
@@ -464,14 +461,12 @@ public class ConnectionDataTracker extends Handler {
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
-
-                    responseSendResult(success, ret, ret);
                 }
 
-                processNextRequest(connId);
+                responseSendResult(success, ret, ret);
 
                 conn.releaseSendWakeLock();
-                conn.notifyDataSend();
+                processNextRequest(connId);
             } else {
                 responseSendResult(false, EventSendResponse.FAILED_CONNECTION_CLOSED, 0);
             }
@@ -568,6 +563,7 @@ public class ConnectionDataTracker extends Handler {
                     Log.d(TAG, "ConnectionReceiverThread, mJsonLen:" + mJsonLen);
                     if (mJsonLen <= ByteString.DEFAULT_STRING_SIZE) {
                         ByteString buf = handleJsonReceiving((int)mJsonLen);
+                        Log.d(TAG, "ConnectionReceiverThread, received:" + buf);
                         if (buf != null) {
                             if (mFileLen > 0) {
                                 setState(RECEIVING_FILE);
@@ -713,6 +709,7 @@ public class ConnectionDataTracker extends Handler {
         private ByteString handleJsonReceiving(int dataLen) {
             if (mConnection == null ||
                     mConnection.getState() != Connection.CONNECTION_STATE_CONNECTED) {
+                Log.d(TAG, "handleJsonReceiving, connection closed. dataLen:" + dataLen);
                 return null;
             }
             if (dataLen <= ByteString.DEFAULT_STRING_SIZE) {
@@ -722,6 +719,8 @@ public class ConnectionDataTracker extends Handler {
                         mConnection.getState() == Connection.CONNECTION_STATE_CONNECTED) {
                     bytesReceived = mConnection.receive(buf.data, dataLen);
                 }
+
+                Log.d(TAG, "handleJsonReceiving, bytesReceived:" + bytesReceived);
 
                 if (bytesReceived != dataLen) {
                     // some problem happened.

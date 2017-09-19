@@ -103,7 +103,7 @@ public class Connection {
     private Object mSendBlockObj = new Object();
     private PowerManager.WakeLock mSendWakeLock;
     private PowerManager.WakeLock mReceiveWakeLock;
-    private static final long RECEIVE_WAKE_LOCK_TIMESTAMP = 1000; //2s
+    private static final long RECEIVE_WAKE_LOCK_TIMESTAMP = 2000; //2s
 
     private class ThreadHandler extends Handler {
         static final int EVENT_HEART_BEAT = 0;
@@ -178,10 +178,8 @@ public class Connection {
     }
 
     public String getIp() {
-        synchronized (mSocketLock) {
-            if (TextUtils.isEmpty(mIpAddress) && mSocket != null) {
-                mIpAddress = mSocket.getInetAddress().getHostAddress();
-            }
+        if (TextUtils.isEmpty(mIpAddress) && mSocket != null) {
+            mIpAddress = mSocket.getInetAddress().getHostAddress();
         }
         return mIpAddress;
     }
@@ -220,24 +218,12 @@ public class Connection {
         }
     }
 
-    public void waitDataSendEnded() {
-        if (mIsDataSending) {
-            try {
-                mSendBlockObj.wait();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public void notifyDataSend() {
-        mSendBlockObj.notify();
-    }
-
     public void acquireReceivWakeLock() {
+        Log.d(TAG, "acquireReceivWakeLock before");
         if (mReceiveWakeLock != null && !mReceiveWakeLock.isHeld()) {
             mReceiveWakeLock.acquire(RECEIVE_WAKE_LOCK_TIMESTAMP);
         }
+        Log.d(TAG, "acquireReceivWakeLock end");
     }
 
     public void setId(final int id) {
@@ -290,56 +276,58 @@ public class Connection {
      *
      * return: data size sent or failed code for sending.
      */
-    public synchronized int send(final byte[] data, final long size) {
+    public int send(final byte[] data, final long size) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             throw new NetworkOnMainThreadException();
         }
 
         Log.d(TAG, "send, mState:" + mState + ", mIsDataSending:" + mIsDataSending +
                 ",mSocketOutputStream:" + mSocketOutputStream);
-        if (mIsDataSending) {
-            return CONNECTION_REASON_CODE_SOCKET_SENDING;
-        }
 
         if (mState != CONNECTION_STATE_CONNECTED) {
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
 
         if (mSocketOutputStream == null) {
-            Log.d(this, "send, SocketOutputStream is not init.");
+            Log.d(TAG, "send, SocketOutputStream is not init.");
 
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
-
-        mIsDataSending = true;
 
         int result = 0;
         int sendCountEveryTime;
         int countNotSend = (int)size;
 
         try {
-            do {
-                sendCountEveryTime = countNotSend > SOCKET_DEFAULT_BUF_SIZE ? SOCKET_DEFAULT_BUF_SIZE : countNotSend;
-                synchronized (mSocketOutputStreamLock) {
-                    if (mSocketOutputStream != null) {
-                        mSocketOutputStream.write(data, result, sendCountEveryTime);
-                    } else {
-                        Log.d(this, "send, SocketOutputStream is not init.");
-                        result = CONNECTION_REASON_CODE_OUT_STREAM_CLOSED;
+            synchronized (mSendBlockObj) {
+                mIsDataSending = true;
+                do {
+                    sendCountEveryTime = countNotSend > SOCKET_DEFAULT_BUF_SIZE ? SOCKET_DEFAULT_BUF_SIZE : countNotSend;
+                    synchronized (mSocketOutputStreamLock) {
+                        if (mSocketOutputStream != null) {
+                            mSocketOutputStream.write(data, result, sendCountEveryTime);
+                        } else {
+                            Log.d(TAG, "send, SocketOutputStream is not init.");
+                            result = CONNECTION_REASON_CODE_OUT_STREAM_CLOSED;
+                            break;
+                        }
+                    }
+
+                    result += sendCountEveryTime;
+                    countNotSend -= sendCountEveryTime;
+
+                    Log.d(TAG, "send, result:" + result +
+                            ", countNotSend:" + countNotSend);
+
+                    if (isValidReason(mToBeClosedReason)) {
                         break;
                     }
-                }
+                } while (countNotSend > 0);
 
-                result += sendCountEveryTime;
-                countNotSend -= sendCountEveryTime;
+                mIsDataSending = false;
+            }
 
-                Log.d(this, "send, result:" + result +
-                        ", countNotSend:" + countNotSend);
-
-                if (isValidReason(mToBeClosedReason)) {
-                    break;
-                }
-            } while (countNotSend > 0);
+            Log.d(TAG, "send, end:" + result);
 
             synchronized (mSocketOutputStreamLock) {
                 if (mSocketOutputStream != null) {
@@ -351,13 +339,10 @@ public class Connection {
             }
         } catch (Exception ioe) {
             ioe.printStackTrace();
+            mIsDataSending = false;
 
-            closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
-            result = CONNECTION_REASON_CODE_IO_EXCEPTION;
+            mToBeClosedReason = CONNECTION_REASON_CODE_IO_EXCEPTION;
         }
-
-        mIsDataSending = false;
-        Log.d(TAG, "send, result:" + result);
 
         if (isValidReason(mToBeClosedReason)) {
             closeInteranl(mToBeClosedReason);
@@ -367,31 +352,27 @@ public class Connection {
             }
         }
 
+        Log.d(TAG, "send, result:" + result + ", mToBeClosedReason:" + mToBeClosedReason);
+
         return result;
     }
 
-    public synchronized int sendFile(final String filePathName) {
+    public int sendFile(final String filePathName) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             throw new NetworkOnMainThreadException();
         }
 
         Log.d(TAG, "send, mState:" + mState + ", mIsDataSending:" + mIsDataSending +
                 ",mSocketOutputStream:" + mSocketOutputStream);
-        if (mIsDataSending) {
-            return CONNECTION_REASON_CODE_SOCKET_SENDING;
-        }
-
         if (mState != CONNECTION_STATE_CONNECTED) {
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
 
         if (mSocketOutputStream == null) {
-            Log.d(this, "send, SocketOutputStream is not init.");
+            Log.d(TAG, "send, SocketOutputStream is not init.");
 
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
-
-        mIsDataSending = true;
 
         FileInputStream fileInputStream;
 
@@ -410,37 +391,43 @@ public class Connection {
             byte[] buffer = new byte[bufferSize];
             int bytesFileRead;
 
-            do {
-                bytesFileRead = fileInputStream.read(buffer, 0, bufferSize);
+            synchronized (mSendBlockObj) {
+                mIsDataSending = true;
 
-                // to the end of the file
-                if (bytesFileRead <= 0) {
-                    break;
-                }
+                do {
+                    bytesFileRead = fileInputStream.read(buffer, 0, bufferSize);
 
-                synchronized (mSocketOutputStreamLock) {
-                    if (mSocketOutputStream != null) {
-                        mSocketOutputStream.write(buffer, 0, bytesFileRead);
-                    } else {
-                        Log.d(this, "send, SocketOutputStream is not init.");
-                        result = CONNECTION_REASON_CODE_OUT_STREAM_CLOSED;
+                    // to the end of the file
+                    if (bytesFileRead <= 0) {
                         break;
                     }
-                }
 
-                Log.d(this, "send, sentBytes:" + sentBytes +
-                        ", countNotSend:" + (fileLen - sentBytes));
+                    synchronized (mSocketOutputStreamLock) {
+                        if (mSocketOutputStream != null) {
+                            mSocketOutputStream.write(buffer, 0, bytesFileRead);
+                        } else {
+                            Log.d(TAG, "send, SocketOutputStream is not init.");
+                            result = CONNECTION_REASON_CODE_OUT_STREAM_CLOSED;
+                            break;
+                        }
+                    }
+
+                    Log.d(TAG, "send, sentBytes:" + sentBytes +
+                            ", countNotSend:" + (fileLen - sentBytes));
 
 
-                sentBytes += bytesFileRead;
+                    sentBytes += bytesFileRead;
 
-                if (isValidReason(mToBeClosedReason)) {
-                    Log.d(this, "connection is requested to be closed:"
-                            + mToBeClosedReason
-                            + ", sentBytes:" + sentBytes);
-                    break;
-                }
-            } while (sentBytes < fileLen);
+                    if (isValidReason(mToBeClosedReason)) {
+                        Log.d(TAG, "connection is requested to be closed:"
+                                + mToBeClosedReason
+                                + ", sentBytes:" + sentBytes);
+                        break;
+                    }
+                } while (sentBytes < fileLen);
+
+                mIsDataSending = false;
+            }
 
             synchronized (mSocketOutputStreamLock) {
                 if (mSocketOutputStream != null) {
@@ -452,12 +439,11 @@ public class Connection {
             }
         } catch (Exception ioe) {
             ioe.printStackTrace();
+            mIsDataSending = false;
 
-            closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
-            result = CONNECTION_REASON_CODE_IO_EXCEPTION;
+            mToBeClosedReason = CONNECTION_REASON_CODE_IO_EXCEPTION;
         }
 
-        mIsDataSending = false;
         Log.d(TAG, "send, result:" + result);
 
         if (isValidReason(mToBeClosedReason)) {
@@ -484,19 +470,22 @@ public class Connection {
      */
     public int receive(byte[] buf, long size) {
         if (mState != CONNECTION_STATE_CONNECTED) {
+            Log.d(TAG, "receive, connection closed!");
             return CONNECTION_REASON_CODE_NOT_CONNECTED;
         }
 
         if (Looper.myLooper() == Looper.getMainLooper()) {
+            Log.d(TAG, "receive, in main loop!");
             throw new NetworkOnMainThreadException();
         }
 
         if (buf == null || size <= 0) {
-            Log.d(this, "receive parameter is not right! buf:" + buf + ", size:" + size);
+            Log.d(TAG, "receive parameter is not right! buf:" + buf + ", size:" + size);
             return CONNECTION_REASON_CODE_UNKNOWN;
         }
 
         if (mIsDataReceiving) {
+            Log.d(TAG, "receive, is in receiving!");
             return CONNECTION_REASON_CODE_SOCKET_RECEIVING;
         }
 
@@ -509,6 +498,7 @@ public class Connection {
 
         long bufSize = size; //byteString.getBufByteSize();
 
+        Log.d(TAG, "receive, size:" + size);
         while (true) {
             if (mSocketInputStream == null && mSocket != null) {
                 try {
@@ -527,16 +517,18 @@ public class Connection {
             }
 
             if (mSocketInputStream == null) {
+                Log.d(TAG, "receive, mSocketInputStream is null.");
                 break;
             }
 
             try {
+                Log.d(TAG, "receive, expected:" + size);
                 receivedEverytime = mSocketInputStream.read(buf, receivedCount, (int) bufSize - receivedCount);
-                acquireReceivWakeLock();
+                Log.d(TAG, "receive, receivedEverytime:" + receivedEverytime);
             } catch (IOException e) {
-                e.printStackTrace();
-
                 closeInteranl(CONNECTION_REASON_CODE_IO_EXCEPTION);
+
+                Log.d(TAG, "receive, receive exception:" + e.getMessage());
 
                 // end current thread if some exception happened!
                 return CONNECTION_REASON_CODE_IO_EXCEPTION;
@@ -544,6 +536,7 @@ public class Connection {
 
             Log.d(TAG, "receive, stream read receivedEverytime:" + receivedEverytime);
             if (receivedEverytime > 0) {
+                acquireReceivWakeLock();
                 receivedCount += receivedEverytime;
 
                 if (size == receivedCount
@@ -690,7 +683,7 @@ public class Connection {
         });*/
     }
 
-    private synchronized void closeSocketOutputStream() {
+    private void closeSocketOutputStream() {
         if (mSocketOutputStream != null) {
             synchronized (mSocketOutputStreamLock) {
                 try {
@@ -707,12 +700,15 @@ public class Connection {
         }
     }
 
-    private synchronized void closeSocketInputStream() {
+    private void closeSocketInputStream() {
         if (mSocketInputStream != null) {
-            try {
-                mIsDataReceiving = false;
 
-                mSocketInputStream.close();
+            try {
+                synchronized (mSocketInputStream) {
+                    mIsDataReceiving = false;
+
+                    mSocketInputStream.close();
+                }
             } catch (IOException ioe) {
                 ioe.printStackTrace();
             }
@@ -736,7 +732,7 @@ public class Connection {
     }
 
     private boolean isValidReason(int reason) {
-        return reason <= 0;
+        return reason < 0;
     }
 
     private void closeInteranl(int reason) {
@@ -754,9 +750,6 @@ public class Connection {
             mLastReasonCode = reason;
 
             closeSocket();
-
-            // to avoid any thread is blocking...
-            mSendBlockObj.notifyAll();
 
             if (mSendWakeLock != null && mSendWakeLock.isHeld()) {
                 mSendWakeLock.release();
