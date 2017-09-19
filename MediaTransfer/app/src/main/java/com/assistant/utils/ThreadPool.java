@@ -20,7 +20,11 @@ public class ThreadPool {
         if (size < DEFAULT_MIN_POOL_SIZE) size = DEFAULT_MIN_POOL_SIZE;
         if (size > DEFAULT_MAX_POOL_SIZE) size = DEFAULT_MAX_POOL_SIZE;
 
-        mExecutor = Executors.newFixedThreadPool(size);
+        if (size == 1) {
+            mExecutor = Executors.newSingleThreadExecutor();
+        } else {
+            mExecutor = Executors.newFixedThreadPool(size);
+        }
         mIsShutdown = false;
     }
 

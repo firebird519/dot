@@ -57,7 +57,7 @@ public class ConnectionDataTracker extends Handler {
     private ConnectionManager mConnectionManager;
     private String mTempFileDir;
 
-    private ThreadPool mThreadPool = new ThreadPool(5);
+    private ThreadPool mEventSendThreadPool = new ThreadPool(1);
 
     private final Map<Integer, List<EventSendRequest>> mConnectionSendQueues =
             Collections.synchronizedMap(new HashMap<Integer, List<EventSendRequest>>());
@@ -208,7 +208,7 @@ public class ConnectionDataTracker extends Handler {
         }
 
         Log.d(TAG, "handleEventSendRequest, request:" + request.toString());
-        mThreadPool.addTask(new EventSendRunnable(request.event.connId,
+        mEventSendThreadPool.addTask(new EventSendRunnable(request.event.connId,
                 bytes,
                 bytes.length,
                 strFilePathName,

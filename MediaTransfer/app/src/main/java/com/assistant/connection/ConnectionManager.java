@@ -235,6 +235,8 @@ public class ConnectionManager {
 
     public void handleConnectionAdded(final Connection connection) {
         Log.d(TAG, "handleConnectionAdded, ip:" + connection.getIp());
+        logConnectionList();
+
         synchronized (mConnections) {
             if (connection != null && !mConnections.containsValue(connection)) {
                 String ipAddress = connection.getIp();
@@ -353,8 +355,6 @@ public class ConnectionManager {
 
     public boolean isIpConnected(String ip) {
         synchronized (mConnections) {
-            logConnectionList();
-
             for (Connection conn : mConnections.values()) {
                 if (TextUtils.equals(conn.getIp(), ip)) {
                     Log.d(TAG, "isIpConnected:" + ip);
@@ -527,6 +527,7 @@ public class ConnectionManager {
                                    final ConnectRequest request) {
         // cancel stop flag when one connectToInternal requst come
         mStopped = false;
+        logConnectionList();
 
         if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() < 2)) {
             if (request != null) {
@@ -629,10 +630,10 @@ public class ConnectionManager {
     }
 
     public boolean hasPendingConnectRequest(String ipAddress) {
-        logConnectReqeustList();
-
         synchronized (mReconnectRequestList) {
             if (mReconnectRequestList.size() > 0) {
+                logConnectReqeustList();
+
                 for (ConnectRequest request : mReconnectRequestList) {
                     if (TextUtils.equals(ipAddress, request.ipAddress)) {
                         Log.d(TAG, "hasPendingConnectRequest, true for ip:" + ipAddress);
@@ -836,6 +837,8 @@ public class ConnectionManager {
             Log.d(TAG, "searchHost, ipSegment:" + ipSegment + ", is in searching state!");
             return;
         }
+
+        logConnectionList();
 
         HostSearchHandler.getInstance(mContext).searchServer(ipSegment, port, new HostSearchHandler.ServerSearchListener() {
             @Override
