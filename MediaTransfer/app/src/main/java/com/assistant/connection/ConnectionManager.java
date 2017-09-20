@@ -717,6 +717,7 @@ public class ConnectionManager {
                     Connection.CONNECTION_REASON_CODE_CONNECT_REQUEST_CANCELED);
         }
     }
+
     /*
      * Connection creation failed not only means connection new failed. Socket of connection
      * connected failed is also this case.

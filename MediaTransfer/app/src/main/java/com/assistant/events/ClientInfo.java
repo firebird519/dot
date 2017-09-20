@@ -1,5 +1,7 @@
 package com.assistant.events;
 
+import com.assistant.utils.Utils;
+
 public class ClientInfo extends Event implements Cloneable {
     public String name;
     public String clientUniqueId;
@@ -26,8 +28,15 @@ public class ClientInfo extends Event implements Cloneable {
 
     @Override
     public String toString() {
-        return "ClientInfo - " + super.toString()
-                + ", name:" + name
-                + ", clientUniqueId:" + clientUniqueId;
+        String log;
+        if (Utils.DEBUG) {
+            log = "ClientInfo - " + super.toString()
+                    + ", name:" + name
+                    + ", clientUniqueId:" + clientUniqueId;
+        } else {
+            log = "ClientInfo";
+        }
+
+        return log;
     }
 }

@@ -1,5 +1,7 @@
 package com.assistant.events;
 
+import com.assistant.utils.Utils;
+
 /**
  * inherrit from Event to reuse gson object.
  */
@@ -31,9 +33,16 @@ public class NetEvent extends EventBase {
 
     @Override
     public String toString() {
-        return "ChatMessageEvent - " + super.toString()
-                + ", netEventId:" + netEventId
-                + ", eventId:" + eventId
-                + ", eventType:" + eventType;
+        String log;
+        if (Utils.DEBUG) {
+            log = "ChatMessageEvent - " + super.toString()
+                    + ", netEventId:" + netEventId
+                    + ", eventId:" + eventId
+                    + ", eventType:" + eventType;
+        } else {
+            log = "ChatMessageEvent";
+        }
+
+        return log;
     }
 }

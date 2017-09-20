@@ -50,18 +50,24 @@ public class Log {
     }
 
     public static void log(String tag, String msg) {
-        android.util.Log.d(tag, msg);
-        writeToFile(DEBUG, tag, msg);
+        if (Utils.DEBUG) {
+            android.util.Log.d(tag, msg);
+            writeToFile(DEBUG, tag, msg);
+        }
     }
 
     public static void d(String tag, String msg) {
-        android.util.Log.d(tag, msg);
-        writeToFile(DEBUG, tag, msg);
+        if (Utils.DEBUG) {
+            android.util.Log.d(tag, msg);
+            writeToFile(DEBUG, tag, msg);
+        }
     }
 
     public static void d(Object object, String msg) {
-        android.util.Log.d(object.getClass().getSimpleName(), msg);
-        writeToFile(DEBUG, object.getClass().getSimpleName(), msg);
+        if (Utils.DEBUG) {
+            android.util.Log.d(object.getClass().getSimpleName(), msg);
+            writeToFile(DEBUG, object.getClass().getSimpleName(), msg);
+        }
     }
 
     public static void e(String tag, String msg) {

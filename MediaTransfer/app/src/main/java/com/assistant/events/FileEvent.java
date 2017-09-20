@@ -1,5 +1,7 @@
 package com.assistant.events;
 
+import com.assistant.utils.Utils;
+
 public class FileEvent extends Event {
     // not serialized by gson.
     public transient String filePathName;
@@ -26,8 +28,15 @@ public class FileEvent extends Event {
 
     @Override
     public String toString() {
-        return "FileEvent - " + super.toString()
-                + ", fileName:" + fileName
-                + ", temp file:" + filePathName;
+        String log;
+        if (Utils.DEBUG) {
+            log = "FileEvent - " + super.toString()
+                    + ", fileName:" + fileName
+                    + ", temp file:" + filePathName;
+        } else {
+            log = "FileEvent";
+        }
+
+        return log;
     }
 }

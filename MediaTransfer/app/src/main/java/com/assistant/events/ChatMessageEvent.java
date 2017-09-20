@@ -1,5 +1,7 @@
 package com.assistant.events;
 
+import com.assistant.utils.Utils;
+
 public class ChatMessageEvent extends Event {
     public String message;
 
@@ -18,7 +20,15 @@ public class ChatMessageEvent extends Event {
 
     @Override
     public String toString() {
-        return "ChatMessageEvent - " + super.toString()
-                + ", message:" + message;
+        String log;
+
+        if (Utils.DEBUG) {
+            log = "ChatMessageEvent - " + super.toString()
+                    + ", message:" + message;
+        } else {
+            log = "ChatMessageEvent";
+        }
+
+        return log;
     }
 }

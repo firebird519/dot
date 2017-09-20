@@ -1,5 +1,7 @@
 package com.assistant.events;
 
+import com.assistant.utils.Utils;
+
 /*
  * response event for Event. To indicate that client has been received corresponding Event
  */
@@ -19,6 +21,13 @@ public class VerifyEvent extends Event {
     }
 
     public String toString() {
-        return "VerifyEvent, eventType:" + eventType + ", eventUnId:" + eventUnId;
+        String log;
+        if (Utils.DEBUG) {
+            log = "VerifyEvent, eventType:" + eventType + ", eventUnId:" + eventUnId;
+        } else {
+            log = "VerifyEvent";
+        }
+
+        return log;
     }
 }
