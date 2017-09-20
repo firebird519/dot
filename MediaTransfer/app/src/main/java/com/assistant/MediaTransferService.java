@@ -34,6 +34,7 @@ public class MediaTransferService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.d(this, "onStartCommand, intent:" + intent.getAction());
         if (intent != null && intent.hasExtra(QUIT_EXTRA)) {
             Log.d(this, "has quit extra, remove stick flag and stop self");
             flags = 0;

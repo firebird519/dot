@@ -222,22 +222,6 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
         });
     }
 
-    class ConnectionCreationListener extends ConnectionCreationCallback {
-        public ConnectionCreationListener(String ipAddress) {
-            ip = ipAddress;
-        }
-
-        @Override
-        public void onResult(boolean ret, int reason) {
-            Log.d(this, "onResult:" + ret);
-
-            Message msg = mHandler.obtainMessage(EVENT_IP_CONNECT_RESULT, ret ? 1 : 0, reason);
-            msg.obj = ip;
-
-            msg.sendToTarget();
-        }
-    }
-
     private void handleIpInput(View view) {
 
         EditText ipEditText = (EditText)view.findViewById(R.id.ip_address_input_edittext);
@@ -259,6 +243,24 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
             showToastMessage(R.string.ip_input_value_error);
         }
     }
+
+
+    class ConnectionCreationListener extends ConnectionCreationCallback {
+        public ConnectionCreationListener(String ipAddress) {
+            ip = ipAddress;
+        }
+
+        @Override
+        public void onResult(boolean ret, int reason) {
+            Log.d(this, "onResult:" + ret);
+
+            Message msg = mHandler.obtainMessage(EVENT_IP_CONNECT_RESULT, ret ? 1 : 0, reason);
+            msg.obj = ip;
+
+            msg.sendToTarget();
+        }
+    }
+
 
     private void showProgressBar() {
         mProgressDialog = new ProgressDialog(MainActivity.this);

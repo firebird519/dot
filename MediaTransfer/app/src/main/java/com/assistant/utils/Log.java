@@ -60,8 +60,8 @@ public class Log {
     }
 
     public static void d(Object object, String msg) {
-        android.util.Log.d(object.getClass().getName(), msg);
-        writeToFile(DEBUG, object.getClass().getName(), msg);
+        android.util.Log.d(object.getClass().getSimpleName(), msg);
+        writeToFile(DEBUG, object.getClass().getSimpleName(), msg);
     }
 
     public static void e(String tag, String msg) {
@@ -70,8 +70,8 @@ public class Log {
     }
 
     public static void e(Object object, String msg) {
-        android.util.Log.e(object.getClass().getName(), msg);
-        writeToFile(ERROR, object.getClass().getName(), msg);
+        android.util.Log.e(object.getClass().getSimpleName(), msg);
+        writeToFile(ERROR, object.getClass().getSimpleName(), msg);
     }
 
     /**
