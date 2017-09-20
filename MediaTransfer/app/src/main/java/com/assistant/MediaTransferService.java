@@ -34,7 +34,7 @@ public class MediaTransferService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(this, "onStartCommand, intent:" + intent.getAction());
+        Log.d(this, "onStartCommand, intent:" +  intent);
         if (intent != null && intent.hasExtra(QUIT_EXTRA)) {
             Log.d(this, "has quit extra, remove stick flag and stop self");
             flags = 0;
@@ -57,12 +57,20 @@ public class MediaTransferService extends Service {
     }
 
     private void tryStartListenAndSearch(Intent intent) {
-        SharePreferencesHelper sharePreferencesHelper
-                = SharePreferencesHelper.getInstance(getApplicationContext());
+        boolean isNetworkOn = isNetworkOn();
+        boolean hasSearchExtra = (intent != null
+                && intent.getBooleanExtra(NETWORK_SEARCH_EXTRA,false));
 
-        if ((intent != null && intent.getBooleanExtra(NETWORK_SEARCH_EXTRA, false))
-                && 1 == sharePreferencesHelper.getInt(
-                SharePreferencesHelper.SP_KEY_NETWORK_ON, 1)) {
+        Log.d(this, "tryStartListenAndSearch, isNetworkOn:" + isNetworkOn
+                + ", has search extra:" + hasSearchExtra);
+
+        if (intent != null && intent.getExtras() != null) {
+            for(String extra : intent.getExtras().keySet()) {
+                Log.d(this, "   tryStartListenAndSearch, extra:" + extra + ", value:" + intent.getExtras().get(extra));
+            }
+        }
+
+        if (hasSearchExtra && isNetworkOn()) {
             mMediaTransferManager =
                     MediaTransferManager.getInstance(getApplicationContext());
 
@@ -70,6 +78,14 @@ public class MediaTransferService extends Service {
 
             mMediaTransferManager.startSearchHost(null);
         }
+    }
+
+    private boolean isNetworkOn() {
+        SharePreferencesHelper sharePreferencesHelper
+                = SharePreferencesHelper.getInstance(getApplicationContext());
+
+        return (1 == sharePreferencesHelper.getInt(
+                SharePreferencesHelper.SP_KEY_NETWORK_ON, 1));
     }
 
     /*

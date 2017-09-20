@@ -75,7 +75,6 @@ public class MediaTransferApplication extends Application {
     public void onActivityResumed(Activity activity) {
         Log.d(this, "onActivityResumed, activityName:"
                 + activity.getClass().getSimpleName());
-        mAppQuit = false;
 
         if (activity != null
                 && !mResumedActivity.contains(activity)) {
@@ -90,6 +89,10 @@ public class MediaTransferApplication extends Application {
 
             mediaTransferManager.startSearchHost(null);
         }
+
+        mHandler.removeMessages(EVENT_ACTIVITY_PAUSED);
+        mAppPaused = false;
+        mAppQuit = false;
     }
 
     public void onActivityPaused(Activity activity) {

@@ -223,7 +223,6 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
     }
 
     private void handleIpInput(View view) {
-
         EditText ipEditText = (EditText)view.findViewById(R.id.ip_address_input_edittext);
         EditText portEditText = (EditText)view.findViewById(R.id.port_input_edittext);
 
@@ -244,7 +243,6 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
         }
     }
 
-
     class ConnectionCreationListener extends ConnectionCreationCallback {
         public ConnectionCreationListener(String ipAddress) {
             ip = ipAddress;
@@ -260,7 +258,6 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
             msg.sendToTarget();
         }
     }
-
 
     private void showProgressBar() {
         mProgressDialog = new ProgressDialog(MainActivity.this);

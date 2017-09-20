@@ -187,7 +187,7 @@ public class ConnectionManager {
                             msg.arg1, msg.arg2 == 1);
                     break;
                 case EVENT_CONNECTION_CREATION_TIMEOUT:
-                    handleConnectionCreationTimeout((Connection) msg.obj);
+                    handleConnectionCreationTimeoutEvent((Connection) msg.obj);
                     break;
                 case EVENT_HOSTCONNECTION_CLOSED:
                     handleHostConnectionClosed((HostConnection) msg.obj, msg.arg1);
@@ -703,6 +703,7 @@ public class ConnectionManager {
                                             ConnectionCreationCallback listener) {
         // if all connections is stopped, then we notify failed here.
         // connection already closed case not handled here. it put to connection.addlistener.
+        removeConnectionCreationTimeoutEvent(conn);
         if (!mStopped) {
             mThreadHandler
                     .obtainMessage(EVENT_CONNECTION_ADDED, conn)
@@ -723,6 +724,8 @@ public class ConnectionManager {
     private void onConnectionCreationFailed(Connection conn,
                                             int reason,
                                             ConnectionCreationCallback listener) {
+        removeConnectionCreationTimeoutEvent(conn);
+
         if (isReconnectAllowed(conn, reason)) {
             Log.d(TAG, "onConnectionCreationFailed, allowed to reconnect to " + conn.getIp());
             tryReconnectTo(conn,
@@ -754,17 +757,24 @@ public class ConnectionManager {
             return;
         }
 
-        if (connection != null) {
-            mThreadHandler.removeMessages(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
-        }
-
         listener.onResult(ret, reason);
     }
 
-    private void handleConnectionCreationTimeout(Connection connection) {
-        Log.d(TAG, "handleConnectionCreationTimeout!");
-
+    // this time out event should be removed once connection has feedback (connect success
+    // or failed.)
+    private void removeConnectionCreationTimeoutEvent(Connection connection) {
         if (connection != null) {
+            mThreadHandler.removeMessages(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
+            Log.d(TAG, "removeConnectionCreationTimeoutEvent, connection:" + connection);
+        }
+    }
+
+    private void handleConnectionCreationTimeoutEvent(Connection connection) {
+        Log.d(TAG, "handleConnectionCreationTimeoutEvent! state:" + connection.getState());
+
+        if (connection != null
+                && connection.getState() != Connection.CONNECTION_STATE_CONNECTED
+                && connection.getState() != Connection.CONNECTION_STATE_CLOSEED) {
             connection.close(Connection.CONNECTION_REASON_CODE_CONNECT_TIMEOUT);
         }
     }
