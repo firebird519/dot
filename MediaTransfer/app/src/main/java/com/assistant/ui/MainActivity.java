@@ -23,7 +23,7 @@ import com.assistant.MediaTransferApplication;
 import com.assistant.MediaTransferService;
 import com.assistant.connection.ConnectionCreationCallback;
 import com.assistant.datastorage.SharePreferencesHelper;
-import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.mediatransfer.ClientManager;
 import com.assistant.mediatransfer.NetworkInfoManager;
 import com.assistant.ui.fragment.AlertDialogFragment;
 import com.assistant.ui.fragment.ClientListFragment;
@@ -48,7 +48,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
 
     private ProgressDialog mProgressDialog;
 
-    private MediaTransferManager mMediaTransferManager;
+    private ClientManager mClientManager;
 
     private SharePreferencesHelper mSharePreferencesHelper;
 
@@ -88,7 +88,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
         //initSideMenu();
 
         mSharePreferencesHelper = SharePreferencesHelper.getInstance(getApplicationContext());
-        mMediaTransferManager = MediaTransferManager.getInstance(getApplicationContext());
+        mClientManager = ClientManager.getInstance(getApplicationContext());
 
         initActionBar();
 
@@ -188,7 +188,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
             return;
         }
         EditText portEditText = (EditText)view.findViewById(R.id.port_input_edittext);
-        portEditText.setText(String.valueOf(mMediaTransferManager.getPort()));
+        portEditText.setText(String.valueOf(mClientManager.getPort()));
 
         EditText ipEditText = (EditText)view.findViewById(R.id.ip_address_input_edittext);
         NetworkInfoManager networkInfoManager = NetworkInfoManager.getInstance(this);
@@ -234,7 +234,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
             Log.d(this, "handleIpInput, ip:" + ip);
 
             if (!TextUtils.isEmpty(ip) && !TextUtils.isEmpty(port)) {
-                mMediaTransferManager.connectTo(ip, Integer.valueOf(port),new ConnectionCreationListener(ip));
+                mClientManager.connectTo(ip, Integer.valueOf(port),new ConnectionCreationListener(ip));
             } else {
                 showToastMessage(R.string.ip_input_value_error);
             }
@@ -286,7 +286,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
         switch (dialogId) {
             case DIALOG_ONOFF_ALERT:
                 mSharePreferencesHelper.save(SharePreferencesHelper.SP_KEY_NETWORK_ON, 0);
-                mMediaTransferManager.disconnectAllConnections();
+                mClientManager.disconnectAllConnections();
                 break;
             case DIALOG_IP_INOUT:
                 handleIpInput(view);

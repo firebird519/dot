@@ -10,7 +10,7 @@ import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
 
 import com.assistant.datastorage.SharePreferencesHelper;
-import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.mediatransfer.ClientManager;
 import com.assistant.ui.MainActivity;
 import com.assistant.utils.Log;
 
@@ -19,7 +19,7 @@ public class MediaTransferService extends Service {
     private static final String NETWORK_SEARCH_EXTRA = "network_search";
     private static final String QUIT_EXTRA = "quit_flags";
 
-    private MediaTransferManager mMediaTransferManager;
+    private ClientManager mClientManager;
 
     @Nullable
     @Override
@@ -71,12 +71,12 @@ public class MediaTransferService extends Service {
         }
 
         if (hasSearchExtra && isNetworkOn()) {
-            mMediaTransferManager =
-                    MediaTransferManager.getInstance(getApplicationContext());
+            mClientManager =
+                    ClientManager.getInstance(getApplicationContext());
 
-            mMediaTransferManager.startListen();
+            mClientManager.startListen();
 
-            mMediaTransferManager.startSearchHost(null);
+            mClientManager.startSearchHost(null);
         }
     }
 

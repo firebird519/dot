@@ -24,7 +24,7 @@ import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
 import com.assistant.events.FileEvent;
-import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.mediatransfer.ClientManager;
 import com.assistant.ui.ChattingActivity;
 import com.assistant.ui.view.CircleIndicatorView;
 import com.assistant.utils.Log;
@@ -46,7 +46,7 @@ public class ClientListFragment extends Fragment {
 
     private TextView mIndicatorTextView;
     private ConnectionManager mConnManager;
-    private MediaTransferManager mMediaTransferManager;
+    private ClientManager mClientManager;
     private LayoutInflater mLayoutInflater = null;
 
     private SharePreferencesHelper mSharePreferencesHelper;
@@ -122,12 +122,12 @@ public class ClientListFragment extends Fragment {
         mConnManager = ConnectionManager.getInstance(getActivity().getApplicationContext());
         mLayoutInflater = (LayoutInflater) getActivity()
                 .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        mMediaTransferManager = MediaTransferManager.getInstance(
+        mClientManager = ClientManager.getInstance(
                 getActivity().getApplicationContext());
 
         updateClientListView();
 
-        mMediaTransferManager.addListener(new MediaTransferManager.MediaTransferListener() {
+        mClientManager.addListener(new ClientManager.ClientManagerListener() {
             @Override
             public void onClientAvailable(int id, ClientInfo info) {
                 updateClientListView();
@@ -228,16 +228,16 @@ public class ClientListFragment extends Fragment {
 
         public void updateClientInfo() {
             synchronized (mClintInfos) {
-                if (mMediaTransferManager == null) {
-                    Log.d(this, "updateClientInfo, mMediaTransferManager not init");
+                if (mClientManager == null) {
+                    Log.d(this, "updateClientInfo, mClientManager not init");
                     return;
                 }
 
                 if (!ClientListFragment.this.isVisible()) {
-                    Log.d(this, "updateClientInfo, mMediaTransferManager not init");
+                    Log.d(this, "updateClientInfo, mClientManager not init");
                     return;
                 }
-                List<Integer> connIdList = mMediaTransferManager.getConnectionIds();
+                List<Integer> connIdList = mClientManager.getConnectionIds();
 
                 Log.d(this, "updateClientInfo, connIdList size:"
                         + connIdList.size());
@@ -248,7 +248,7 @@ public class ClientListFragment extends Fragment {
                         connIdList.remove(Integer.valueOf(item.connId));
 
                         // remove ClientInfoItem for connection not available
-                        if (!mMediaTransferManager.isClientAvailable(item.connId)) {
+                        if (!mClientManager.isClientAvailable(item.connId)) {
                             Log.d(this, "updateClientInfo, remove item for connId:"
                                     + item.connId);
                             toRemovedItems.add(item);
@@ -279,7 +279,7 @@ public class ClientListFragment extends Fragment {
                             item = new ClientInfoItem(id,
                                     connection.getIp(),
                                     (ClientInfo) connection.getConnData(),
-                                    mMediaTransferManager.getMessageList(id));
+                                    mClientManager.getMessageList(id));
 
                             Log.d(this, "updateClientInfo, add item for connId:"
                                     + item.connId);

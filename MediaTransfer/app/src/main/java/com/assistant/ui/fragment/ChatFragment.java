@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -29,7 +28,7 @@ import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
 import com.assistant.events.FileEvent;
-import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.mediatransfer.ClientManager;
 import com.assistant.ui.FileChooserActivity;
 import com.assistant.utils.FileOpenIntentUtils;
 import com.assistant.utils.Log;
@@ -65,7 +64,7 @@ public class ChatFragment extends Fragment {
     private Context mContext;
 
     private int mConnId = -1;
-    private MediaTransferManager mMediaTransManager;
+    private ClientManager mMediaTransManager;
     private ConnectionManager mConnectionManager;
 
     private ClientInfo mConnClientInfo;
@@ -264,7 +263,7 @@ public class ChatFragment extends Fragment {
                 getActivity().setTitle(mConnClientInfo.name);
             }
 
-            mMediaTransManager = MediaTransferManager.getInstance(mContext.getApplicationContext());
+            mMediaTransManager = ClientManager.getInstance(mContext.getApplicationContext());
 
             mChatEventList = mMediaTransManager.getMessageList(mConnId);
 
@@ -274,7 +273,7 @@ public class ChatFragment extends Fragment {
 
             mHandler.sendEmptyMessage(EVENT_SCREEN_UPDATE);
 
-            mMediaTransManager.addListener(new MediaTransferManager.MediaTransferListener() {
+            mMediaTransManager.addListener(new ClientManager.ClientManagerListener() {
                 @Override
                 public void onClientAvailable(int id, ClientInfo info) {
                     if (id == mConnId) {

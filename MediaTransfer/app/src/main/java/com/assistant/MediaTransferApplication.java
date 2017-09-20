@@ -9,7 +9,7 @@ import android.os.Message;
 import android.os.SystemClock;
 
 import com.assistant.connection.HostSearchHandler;
-import com.assistant.mediatransfer.MediaTransferManager;
+import com.assistant.mediatransfer.ClientManager;
 import com.assistant.ui.permissiongrant.PermissionHelper;
 import com.assistant.utils.Log;
 
@@ -84,10 +84,10 @@ public class MediaTransferApplication extends Application {
         Log.d(this, "onActivityResumed, mAppPaused:" + mAppPaused);
 
         if (mAppPaused) {
-            MediaTransferManager mediaTransferManager = MediaTransferManager.getInstance(
+            ClientManager clientManager = ClientManager.getInstance(
                     getApplicationContext());
 
-            mediaTransferManager.startSearchHost(null);
+            clientManager.startSearchHost(null);
         }
 
         mHandler.removeMessages(EVENT_ACTIVITY_PAUSED);
@@ -122,7 +122,7 @@ public class MediaTransferApplication extends Application {
 
     // only designed to be used by MediaTransferService
     public void quit(boolean stopService) {
-        MediaTransferManager mediaTransferManager = MediaTransferManager.getInstance(
+        ClientManager clientManager = ClientManager.getInstance(
                 getApplicationContext());
 
         mAppQuit = true;
@@ -138,7 +138,7 @@ public class MediaTransferApplication extends Application {
             activity.finish();
         }
 
-        mediaTransferManager.disconnectAllConnections();
+        clientManager.disconnectAllConnections();
     }
 
     public void onWriteExtStoragePermissionGranted(Context context) {
