@@ -25,6 +25,7 @@ public class ThreadPool {
         } else {
             mExecutor = Executors.newFixedThreadPool(size);
         }
+
         mIsShutdown = false;
     }
 

@@ -21,9 +21,11 @@ import android.widget.Toast;
 
 import com.assistant.MediaTransferApplication;
 import com.assistant.MediaTransferService;
-import com.assistant.connection.ConnectionCreationCallback;
+import com.assistant.connection.ConnectionCreationRequest;
+import com.assistant.connection.Connection;
 import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.mediatransfer.ClientManager;
+import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.mediatransfer.NetworkInfoManager;
 import com.assistant.ui.fragment.AlertDialogFragment;
 import com.assistant.ui.fragment.ClientListFragment;
@@ -49,6 +51,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
     private ProgressDialog mProgressDialog;
 
     private ClientManager mClientManager;
+    private MediaTransferManager mMediaTransferManager;
 
     private SharePreferencesHelper mSharePreferencesHelper;
 
@@ -89,6 +92,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
 
         mSharePreferencesHelper = SharePreferencesHelper.getInstance(getApplicationContext());
         mClientManager = ClientManager.getInstance(getApplicationContext());
+        mMediaTransferManager = MediaTransferManager.getInstance(getApplicationContext());
 
         initActionBar();
 
@@ -187,8 +191,9 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
             Log.d(this, "handleIpInputViewCreated, view is null.");
             return;
         }
+
         EditText portEditText = (EditText)view.findViewById(R.id.port_input_edittext);
-        portEditText.setText(String.valueOf(mClientManager.getPort()));
+        portEditText.setText(String.valueOf(mMediaTransferManager.getPort()));
 
         EditText ipEditText = (EditText)view.findViewById(R.id.ip_address_input_edittext);
         NetworkInfoManager networkInfoManager = NetworkInfoManager.getInstance(this);
@@ -234,7 +239,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
             Log.d(this, "handleIpInput, ip:" + ip);
 
             if (!TextUtils.isEmpty(ip) && !TextUtils.isEmpty(port)) {
-                mClientManager.connectTo(ip, Integer.valueOf(port),new ConnectionCreationListener(ip));
+                mClientManager.connectTo(ip, Integer.valueOf(port),new ConnectionCreationResponse(ip));
             } else {
                 showToastMessage(R.string.ip_input_value_error);
             }
@@ -243,16 +248,17 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
         }
     }
 
-    class ConnectionCreationListener extends ConnectionCreationCallback {
-        public ConnectionCreationListener(String ipAddress) {
+    class ConnectionCreationResponse extends com.assistant.connection.ConnectionCreationResponse {
+        public ConnectionCreationResponse(String ipAddress) {
             ip = ipAddress;
         }
 
         @Override
-        public void onResult(boolean ret, int reason) {
-            Log.d(this, "onResult:" + ret);
+        public void onResponse(boolean success, Connection connection,
+                               ConnectionCreationRequest request, int reason) {
+            Log.d(this, "onResponse:" + success);
 
-            Message msg = mHandler.obtainMessage(EVENT_IP_CONNECT_RESULT, ret ? 1 : 0, reason);
+            Message msg = mHandler.obtainMessage(EVENT_IP_CONNECT_RESULT, success ? 1 : 0, reason);
             msg.obj = ip;
 
             msg.sendToTarget();
@@ -312,7 +318,7 @@ public class MainActivity extends BaseAppCompatActivity implements AlertDialogFr
     private void initActionBar() {
         mOnOffSwitchBtn = (Switch) findViewById(R.id.toolbar_switch_onoff);
 
-        if (mSharePreferencesHelper.getInt(SharePreferencesHelper.SP_KEY_NETWORK_ON, 1) == 1) {
+        if (mMediaTransferManager.isNetworkSettingsOn()) {
             mOnOffSwitchBtn.setChecked(true);
         } else {
             mOnOffSwitchBtn.setChecked(false);

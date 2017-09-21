@@ -54,8 +54,8 @@ public class EventSendRequest {
 
     public String toString() {
         return "EventSendRequest, Event:" + event.toString()
-                + ", retryCount:" + retryCount
-                + ", response:" + response
+                + ", retryTimes:" + retryCount
+                + ", responseList:" + response
                 + ", lastSendTime:" + lastSendTime;
     }
 }

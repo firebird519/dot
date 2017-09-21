@@ -119,14 +119,14 @@ public class ConnectionDataTracker extends Handler {
         }
     }
 
-    public void onConnectionRemoved(Connection connection) {
+    public void onConnectionRemoved(int connId) {
         synchronized (mConnectionSendQueues) {
-            List<EventSendRequest> sendQueue = mConnectionSendQueues.remove(connection.getId());
+            List<EventSendRequest> sendQueue = mConnectionSendQueues.remove(connId);
 
             if (sendQueue != null && sendQueue.size() > 0) {
                 for (EventSendRequest request : sendQueue) {
                     if (request.response != null) {
-                        request.response.onResult(connection.getId(),
+                        request.response.onResult(connId,
                                 request.event.uniqueId,
                                 EventSendResponse.RESULT_FAILED,
                                 EventSendResponse.FAILED_CONNECTION_CLOSED);
@@ -374,7 +374,7 @@ public class ConnectionDataTracker extends Handler {
     }
 
     private boolean tryResendEvent(EventSendRequest request, int failedReason) {
-        Log.d(TAG, "tryResendEvent, request retryCount:" + request.retryCount
+        Log.d(TAG, "tryResendEvent, request retryTimes:" + request.retryCount
                 + ", failedReason:"  +failedReason);
 
         // if not contains in mToBeVerifiedRequests, it means it maybe already time out.

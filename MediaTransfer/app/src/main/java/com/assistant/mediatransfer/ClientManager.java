@@ -1,7 +1,6 @@
 package com.assistant.mediatransfer;
 
 import android.content.Context;
-import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -9,11 +8,10 @@ import android.os.Message;
 import android.text.TextUtils;
 
 import com.assistant.connection.Connection;
-import com.assistant.connection.ConnectionCreationCallback;
+import com.assistant.connection.ConnectionCreationResponse;
 import com.assistant.connection.ConnectionManager;
 import com.assistant.connection.EventSendRequest;
 import com.assistant.connection.EventSendResponse;
-import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.events.ChatMessageEvent;
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
@@ -28,10 +26,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 public class ClientManager {
     private static ClientManager sInstance;
+
     public static ClientManager getInstance(Context context) {
         if (sInstance == null && context != null) {
             sInstance = new ClientManager(context);
@@ -52,6 +50,7 @@ public class ClientManager {
 
     private Context mContext;
     private ConnectionManager mConnectionManager;
+    private MediaTransferManager mMediaTransferManager;
 
     private Set<Integer> mConnectionIds =
             Collections.synchronizedSet(new HashSet<Integer>());
@@ -60,17 +59,10 @@ public class ClientManager {
     private Map<Integer, Object> mMsgCollections =
             Collections.synchronizedMap(new HashMap<Integer, Object>(10));
 
-    // IMPORTANT: careful to change to avoid can not listen or connect to other client.
-    private int mPort = ConnectionManager.DEFAULT_PORT;
-
-    private ClientInfo mClientInfo;
-
-    private SharePreferencesHelper mSharePreferencesHelper;
 
     private ThreadHandler mThreadHandler;
 
     class ThreadHandler extends Handler {
-        public static final int EVENT_GENERATE_CLIENTINFO = 0;
         public static final int EVENT_CONNECTION_ADDED = 1;
         public static final int EVENT_CONNECTION_REMOVED = 2;
         public static final int EVENT_CONNECTION_EVENT_RECEIVED = 3;
@@ -83,9 +75,6 @@ public class ClientManager {
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
-                case EVENT_GENERATE_CLIENTINFO:
-                    generateClientInfo();
-                    break;
                 case EVENT_CONNECTION_ADDED:
                     handleConnectionAdded(msg.arg1);
                     break;
@@ -111,8 +100,8 @@ public class ClientManager {
     private ClientManager(Context context) {
         mContext = context;
 
-        mSharePreferencesHelper = SharePreferencesHelper.getInstance(context);
         mConnectionManager = ConnectionManager.getInstance(context);
+        mMediaTransferManager = MediaTransferManager.getInstance(context);
 
         mConnectionManager.addListener(new ConnectionManager.ConnectionManagerListener() {
             @Override
@@ -141,12 +130,6 @@ public class ClientManager {
         HandlerThread thread = new HandlerThread("ClientManager");
         thread.start();
         mThreadHandler = new ThreadHandler(thread.getLooper());
-
-        //mThreadHandler.sendEmptyMessage(ThreadHandler.EVENT_GENERATE_CLIENTINFO);
-
-        generateClientInfo();
-        mPort = mSharePreferencesHelper.getInt(SharePreferencesHelper.SP_KEY_PORT,
-                ConnectionManager.DEFAULT_PORT);
     }
 
     public List<Event> getMessageList(int connId) {
@@ -171,7 +154,7 @@ public class ClientManager {
     public int sendEvent(int connId, Event event, EventSendResponse response) {
         if (event != null) {
             EventSendRequest request = new EventSendRequest(event, response);
-            recordEvent(connId, event);
+            recordVisibleEvent(connId, event);
 
             Log.d(this, "sendEvent, connId:" + event.connId + ", event:" + event.getEventClassName());
             mConnectionManager.sendEvent(request);
@@ -185,7 +168,7 @@ public class ClientManager {
 
         if (event != null) {
             EventSendRequest request = new EventSendRequest(event, response);
-            recordEvent(connId, event);
+            recordVisibleEvent(connId, event);
 
             mConnectionManager.sendEvent(request);
 
@@ -225,7 +208,7 @@ public class ClientManager {
 
     private void sendClientInfoEvent(int connId) {
         Log.d(this, "sendClientInfoEvent, connId:" + connId);
-        ClientInfo clientInfoEvent = getClientInfo();
+        ClientInfo clientInfoEvent = mMediaTransferManager.getClientInfo();
 
         clientInfoEvent.setConnId(connId);
         clientInfoEvent.setEventCreateTime(System.currentTimeMillis());
@@ -250,7 +233,10 @@ public class ClientManager {
     }
 
     private void handleConnectionClosed(int connId, int closeReason) {
+        Log.d(this, "handleConnectionClosed, connId:" + connId);
         removeConnectId(connId);
+
+        mMsgCollections.remove(connId);
 
         notifyClientDisconnected(connId, closeReason);
     }
@@ -263,7 +249,7 @@ public class ClientManager {
                 break;
             case Event.EVENT_TYPE_FILE:
             case Event.EVENT_TYPE_CHAT:
-                recordEvent(connId, event);
+                recordVisibleEvent(connId, event);
                 notifyEventReceived(connId, event);
                 break;
 
@@ -299,19 +285,19 @@ public class ClientManager {
         }
     }
 
-    void recordEvent(int connId, Event event){
+    void recordVisibleEvent(int connId, Event event){
         if (event instanceof ChatMessageEvent
                 || event instanceof FileEvent) {
-            Log.d(this, "recordEvent, record event for connId:" + connId);
+            Log.d(this, "recordVisibleEvent, record event for connId:" + connId);
             List<Event> msgList = getMessageList(connId);
 
             if (msgList != null) {
                 msgList.add(event);
             } else {
-                Log.d(this, "recordEvent, ChatMessageEvent message list not found!");
+                Log.d(this, "recordVisibleEvent, ChatMessageEvent message list not found!");
             }
         } else {
-            Log.d(this, "recordEvent, event not recorded:" + event.getEventClassName());
+            Log.d(this, "recordVisibleEvent, event not recorded:" + event.getEventClassName());
         }
     }
 
@@ -328,6 +314,7 @@ public class ClientManager {
 
     private void removeConnectId(int connId) {
         synchronized (mConnectionIds) {
+            Log.d(this, "removeConnectId:" + connId);
             mConnectionIds.remove(Integer.valueOf(connId));
         }
 
@@ -350,28 +337,14 @@ public class ClientManager {
         Log.d(this, "mConnectionIds:" + builder.toString());
     }
 
-
-    public int getPort() {
-        return mPort;
-    }
-
-
-    public boolean isNetworkSettingsOn() {
-        boolean isOn = false;
-
-        if (mSharePreferencesHelper != null) {
-            isOn = mSharePreferencesHelper.getInt(SharePreferencesHelper.SP_KEY_NETWORK_ON, 1) == 1;
-        }
-
-        return isOn;
-    }
-
-    public void connectTo(String ipAddress, int port, ConnectionCreationCallback listener) {
+    public void connectTo(String ipAddress, int port, ConnectionCreationResponse listener) {
         mConnectionManager.connectTo(ipAddress, port, listener);
     }
 
     public void startListen() {
-        mThreadHandler.obtainMessage(ThreadHandler.EVENT_LISTEN,getPort(),0).sendToTarget();
+        mThreadHandler.obtainMessage(ThreadHandler.EVENT_LISTEN,
+                mMediaTransferManager.getPort(),
+                0).sendToTarget();
     }
 
     public void startSearchHost(ConnectionManager.SearchListener listener) {
@@ -389,8 +362,9 @@ public class ClientManager {
         Log.d(this, "startSearchHost, ip:" + ip
                 + ", wifi connected:" + networkInfoManager.isWifiConnected()
                 + ", listener:" + listener);
-        if (!TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected() && isNetworkSettingsOn()) {
-            mConnectionManager.searchHost(ip, mPort, listener);
+        if (!TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected()
+                && mMediaTransferManager.isNetworkSettingsOn()) {
+            mConnectionManager.searchHost(ip, mMediaTransferManager.getPort(), listener);
         } else {
             if (listener != null) {
                 listener.onSearchCompleted();
@@ -399,45 +373,9 @@ public class ClientManager {
     }
 
     public void disconnectAllConnections() {
-        mConnectionManager.stopAllConnections();
+        mConnectionManager.disconnectAllConnections();
     }
 
-    public ClientInfo getClientInfo() {
-        try {
-            return (ClientInfo)mClientInfo.clone();
-        } catch (CloneNotSupportedException e) {
-            Log.d(this, "getClientInfo CloneNotSupportedException:" + e.getMessage());
-        }
-
-        return null;
-
-    }
-
-    private void generateClientInfo() {
-        String name = mSharePreferencesHelper.getString(SharePreferencesHelper.SP_KEY_CLIENT_NAME);
-
-        if (TextUtils.isEmpty(name)) {
-            name = Build.MODEL;
-
-            if (TextUtils.isEmpty(name)) {
-                String currentTime = String.valueOf(System.currentTimeMillis());
-
-                name = "client" + currentTime.substring(currentTime.length() - 5);
-            }
-
-            mSharePreferencesHelper.save(SharePreferencesHelper.SP_KEY_CLIENT_NAME, name);
-        }
-
-        String uniqueId = mSharePreferencesHelper.getString(SharePreferencesHelper.SP_KEY_UNIQUE_ID);
-
-        if (TextUtils.isEmpty(uniqueId)) {
-            uniqueId = UUID.randomUUID().toString();
-
-            mSharePreferencesHelper.save(SharePreferencesHelper.SP_KEY_UNIQUE_ID, uniqueId);
-        }
-
-        mClientInfo = new ClientInfo(name, uniqueId);
-    }
 
     public void addListener(ClientManagerListener listener) {
         if (listener != null) {

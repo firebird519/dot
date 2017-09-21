@@ -11,6 +11,7 @@ import android.support.v4.app.TaskStackBuilder;
 
 import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.mediatransfer.ClientManager;
+import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.MainActivity;
 import com.assistant.utils.Log;
 
@@ -57,7 +58,7 @@ public class MediaTransferService extends Service {
     }
 
     private void tryStartListenAndSearch(Intent intent) {
-        boolean isNetworkOn = isNetworkOn();
+        boolean isNetworkOn = MediaTransferManager.getInstance(this).isNetworkSettingsOn();
         boolean hasSearchExtra = (intent != null
                 && intent.getBooleanExtra(NETWORK_SEARCH_EXTRA,false));
 
@@ -70,7 +71,7 @@ public class MediaTransferService extends Service {
             }
         }
 
-        if (hasSearchExtra && isNetworkOn()) {
+        if (hasSearchExtra && isNetworkOn) {
             mClientManager =
                     ClientManager.getInstance(getApplicationContext());
 
@@ -78,14 +79,6 @@ public class MediaTransferService extends Service {
 
             mClientManager.startSearchHost(null);
         }
-    }
-
-    private boolean isNetworkOn() {
-        SharePreferencesHelper sharePreferencesHelper
-                = SharePreferencesHelper.getInstance(getApplicationContext());
-
-        return (1 == sharePreferencesHelper.getInt(
-                SharePreferencesHelper.SP_KEY_NETWORK_ON, 1));
     }
 
     /*

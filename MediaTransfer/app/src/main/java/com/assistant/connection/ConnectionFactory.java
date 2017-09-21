@@ -27,24 +27,28 @@ public class ConnectionFactory {
 
     public static Connection createConnection(String ip,
                                               int port,
-                                              final ConnectionManager.ConnectRequest request,
                                               Connection.ConnectionListener listener) {
-        Log.d(TAG, "createConnection0:" + ip);
+        return createConnection(ip, port, -1, listener);
+    }
+
+    public static Connection createConnection(String ip,
+                                              int port,
+                                              int connId,
+                                              Connection.ConnectionListener listener) {
+        Log.d(TAG, "createConnection:" + ip + ", port:" + port + ", id:" + connId);
         Connection conn = null;
         try {
-            conn = new Connection(null, false, request);
+            conn = new Connection(connId, null, false);
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        Log.d(TAG, "createConnection1:" + ip);
 
         if (conn != null) {
             if (listener != null) {
                 conn.addListner(listener);
             }
 
-            Log.d(TAG, "createConnection:" + ip);
+            Log.d(TAG, "createConnection connect to:" + ip);
 
             conn.connect(ip, port);
         } else {

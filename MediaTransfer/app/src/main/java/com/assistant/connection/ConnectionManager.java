@@ -18,7 +18,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static com.assistant.connection.HostSearchHandler.SERVER_SEARCH_CANCELED;
@@ -40,8 +39,7 @@ public class ConnectionManager {
 
     public static final int DEFAULT_PORT = 8671;
 
-    public static int MAX_RECONNECT_COUNT = 3;
-    public static final int RECONNECT_DELAY_TIMESTAMP = 2000; // 5s
+    private static final long HOST_RECONNECT_DELAY = 5000; //5s
 
     private Context mContext;
 
@@ -50,51 +48,6 @@ public class ConnectionManager {
         void onConnectionRemoved(int id, int reason);
 
         void onEventReceived(int id, Event event);
-    }
-
-    public static class ConnectRequest {
-        String ipAddress;
-        int port;
-        ConnectionCreationCallback listener;
-        int retryCount;
-        int connId;
-        int disconnectReason;
-
-        ConnectRequest(int id, String ip, int connPort, int reason,
-                       int retryTimes, ConnectionCreationCallback cb) {
-            connId = id;
-            ipAddress = ip;
-            port = connPort;
-            retryCount = retryTimes;
-            listener = cb;
-            disconnectReason = reason;
-        }
-
-        public String toString() {
-            return "[ConnectRequest] - connId:" + connId
-                    + " ip:" + ipAddress
-                    + ", port:" + port
-                    + ", disconnect reason:" + disconnectReason
-                    + ", retryTimes:" + retryCount
-                    + ", listener:" + listener;
-        }
-    }
-
-    public static class ConnectionManagerListenerBase implements ConnectionManagerListener {
-        @Override
-        public void onConnectionAdded(int id) {
-            Log.d(this, "ConnectionManagerListenerBase.onConnectionAdded");
-        }
-
-        @Override
-        public void onConnectionRemoved(int id, int reason) {
-            Log.d(this, "ConnectionManagerListenerBase.onConnectionRemoved");
-        }
-
-        @Override
-        public void onEventReceived(int id, Event event) {
-            Log.d(this, "ConnectionManagerListenerBase.onEventReceived");
-        }
     }
 
     private class ConnectionListenerImpl implements Connection.ConnectionListener {
@@ -108,11 +61,7 @@ public class ConnectionManager {
         @Override
         public void onConnectFailed(Connection conn, int reasonCode) {
             Log.d(TAG, "connection connected failed for ip:" + conn.getIp()
-                    + ", reason:" + reasonCode);
-            mThreadHandler
-                    .obtainMessage(EVENT_CONNECTION_CONNECT_FAILED,
-                            reasonCode, conn.getReconnectRequest() != null ? 1 : 0, conn)
-                    .sendToTarget();
+                    + ", reason:" + reasonCode + ", impossible case!");
         }
 
         @Override
@@ -122,7 +71,7 @@ public class ConnectionManager {
 
             mThreadHandler
                     .obtainMessage(EVENT_CONNECTION_CLOSED,
-                            reasonCode, conn.getReconnectRequest() != null ? 1 : 0, conn)
+                            reasonCode, 0, conn)
                     .sendToTarget();
 
             conn.removeListener(this);
@@ -138,13 +87,13 @@ public class ConnectionManager {
     private List<HostConnection> mHostConnList =
             Collections.synchronizedList(new ArrayList<HostConnection>());
 
-    private List<ConnectRequest> mReconnectRequestList =
-            Collections.synchronizedList(new ArrayList<ConnectRequest>());
-
     private static int sConnIdBase = -1;
+
+    private int mPort;
 
     private ConnMgrThreadHandler mThreadHandler;
     private ConnectionDataTracker mDataTracker;
+    private ConnectionCreationHandler mConnectionCreationHandler;
 
     private boolean mStopped = false;
 
@@ -152,12 +101,9 @@ public class ConnectionManager {
 
     private static final int EVENT_CONNECTION_ADDED = 0;
     private static final int EVENT_CONNECTION_CLOSED = 1;
-    private static final int EVENT_CONNECTION_CONNECT_FAILED = 2;
-    private static final int EVENT_CONNECTION_CREATION_TIMEOUT = 3;
-    private static final int EVENT_HOSTCONNECTION_CLOSED = 4;
-    private static final int EVENT_CONNECTION_CONNECT = 5;
-    private static final int EVENT_NOTIFY_CONNECTION_ADDED = 6;
-    private static final int EVENT_NOTIFY_CONNECTION_REMOVED = 7;
+    private static final int EVENT_HOSTCONNECTION_CLOSED = 3;
+    private static final int EVENT_NOTIFY_CONNECTION_ADDED = 4;
+    private static final int EVENT_NOTIFY_CONNECTION_REMOVED = 5;
 
     private static final int CONNECTION_CREATION_TIMEOUT_TIMESTAMP = 70*1000; //70s
     class ConnMgrThreadHandler extends Handler {
@@ -171,12 +117,8 @@ public class ConnectionManager {
                 case EVENT_CONNECTION_ADDED:
                     handleConnectionAdded((Connection) msg.obj);
                     break;
-                case EVENT_CONNECTION_CONNECT_FAILED:
-                    handleConnectionRemoved((Connection)msg.obj,
-                            msg.arg1, msg.arg2 == 1);
-                    break;
                 case EVENT_NOTIFY_CONNECTION_ADDED:
-                    // TODO: add reconnect flag...
+                    // TODO: add reconnect flag...?
                     notifyConnectionAdded(msg.arg1);
                     break;
                 case EVENT_NOTIFY_CONNECTION_REMOVED:
@@ -184,16 +126,10 @@ public class ConnectionManager {
                     break;
                 case EVENT_CONNECTION_CLOSED:
                     handleConnectionRemoved((Connection)msg.obj,
-                            msg.arg1, msg.arg2 == 1);
-                    break;
-                case EVENT_CONNECTION_CREATION_TIMEOUT:
-                    handleConnectionCreationTimeoutEvent((Connection) msg.obj);
+                            msg.arg1);
                     break;
                 case EVENT_HOSTCONNECTION_CLOSED:
                     handleHostConnectionClosed((HostConnection) msg.obj, msg.arg1);
-                    break;
-                case EVENT_CONNECTION_CONNECT:
-                    handleConnectRequest((ConnectRequest) msg.obj);
                     break;
                 default:
                     break;
@@ -218,6 +154,10 @@ public class ConnectionManager {
         thread.start();
         mThreadHandler = new ConnMgrThreadHandler(thread.getLooper());
 
+        // use same looper with connection manager due to no long time cpu hosting work.
+        mConnectionCreationHandler = new ConnectionCreationHandler(thread.getLooper(),
+                this);
+
         HandlerThread trackerHandler = new HandlerThread("ConnectionDataTracker");
         trackerHandler.start();
 
@@ -233,14 +173,13 @@ public class ConnectionManager {
         });
     }
 
-    public void handleConnectionAdded(final Connection connection) {
+    private void handleConnectionAdded(final Connection connection) {
         Log.d(TAG, "handleConnectionAdded, ip:" + connection.getIp());
         logConnectionList();
 
         synchronized (mConnections) {
             if (connection != null && !mConnections.containsValue(connection)) {
                 String ipAddress = connection.getIp();
-                removeConnectRequest(ipAddress);
 
                 if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() <= 2)) {
                     Log.d(this, "handleConnectionAdded: ipAddress already connected!");
@@ -250,12 +189,29 @@ public class ConnectionManager {
 
                 boolean reConnected = false;
 
-                // this connection maybe reconnected and connection id already existd
-                if (connection.getId() < 0) {
-                    connection.setId(generateConnectionId());
-                } else {
+                ConnectionCreationRequest request =
+                        mConnectionCreationHandler.getPendingConnectRequest(connection.getIp());
+
+                // this connection maybe reconnected and connection id already existed
+                int id = connection.getId();
+
+                if (request != null) {
+                    id = request.connId;
                     reConnected = true;
+
+                    if (connection.getId() != -1 && connection.getId() != id) {
+                        Log.e(TAG, "why there are two different ids for same ip...");
+                    }
+
+                    Log.d(TAG, "handleConnectionAdded, drop request due to already connected!");
+                    request.isDropped = true;
                 }
+
+                if (id < 0) {
+                    id = generateConnectionId();
+                }
+
+                connection.setId(id);
 
                 connection.setWakeLock(Utils.createBackGroundWakeLock(mContext,
                                 String.valueOf(connection.getId()) + ":send"),
@@ -282,11 +238,9 @@ public class ConnectionManager {
         }
     }
 
-    private void handleConnectionRemoved(Connection connection, int reason, boolean reconnectFailed) {
+    private void handleConnectionRemoved(Connection connection, int reason) {
         Log.d(TAG, "handleConnectionRemoved, id:" + connection.getId() + ", ip:"
                 + connection.getIp() + ", reason:" + reason);
-        logConnectReqeustList();
-
         logConnectionList();
 
         synchronized (mConnections) {
@@ -295,34 +249,65 @@ public class ConnectionManager {
 
                 if (isReconnectAllowed(connection, reason)) {
                     Log.d(TAG, "handleConnectionRemoved, allowed to reconnect.");
-                    tryReconnectTo(connection,
-                            reason);
-                } else {
-                    removeConnectRequest(connection.getIp());
+                    long connectDelay = connection.isHost() ? HOST_RECONNECT_DELAY : 0;
 
-                    mDataTracker.onConnectionRemoved(connection);
+                    ConnectionCreationRequest request =
+                            ConnectionCreationRequest.generateReconnectRequest(connection,
+                                    mPort,
+                                    reason,
+                                    3,
+                                    connectDelay,
+                                    new ConnectionCreationResponse(){
+                        @Override
+                        public void onResponse(boolean success,
+                                               Connection connection,
+                                               ConnectionCreationRequest connectRequest,
+                                               int reason) {
+                            Log.d(TAG, "handleConnectionRemoved, reconnect result:" + success);
+                            if (!success) {
+                                mDataTracker.onConnectionRemoved(connectRequest.connId);
+                                mThreadHandler
+                                        .obtainMessage(EVENT_NOTIFY_CONNECTION_REMOVED,
+                                                connectRequest.connId,
+                                                connectRequest.disconnectReason)
+                                        .sendToTarget();
+                            }
+                        }
+                    });
+
+                    mConnectionCreationHandler.processConnectCreationRequest(request);
+                } else {
+                    mDataTracker.onConnectionRemoved(connection.getId());
                     mThreadHandler
-                            .obtainMessage(EVENT_NOTIFY_CONNECTION_REMOVED, connection.getId(), reason)
+                            .obtainMessage(EVENT_NOTIFY_CONNECTION_REMOVED,
+                                    connection.getId(), reason)
                             .sendToTarget();
                 }
-            } else if (reconnectFailed) {
-                removeConnectRequest(connection.getIp());
-
-                // connection reconnect failed. notify ui and do connection removed for tracker.
-                mDataTracker.onConnectionRemoved(connection);
-                mThreadHandler
-                        .obtainMessage(EVENT_NOTIFY_CONNECTION_REMOVED, connection.getId(), reason)
-                        .sendToTarget();
-            } else {
-                Log.d(TAG, "handleConnectionRemoved, connection already removed.");
             }
         }
+    }
+
+    public void setPort(int port) {
+        mPort = port;
     }
 
     public Connection getConnection(int id) {
         synchronized (mConnections) {
             return mConnections.get(id);
         }
+    }
+
+    public Connection getConnection(String ipAddress) {
+        synchronized (mConnections) {
+            for (Connection conn : mConnections.values()) {
+                if (TextUtils.equals(conn.getIp(), ipAddress)) {
+                    Log.d(TAG, "getConnection:" + ipAddress);
+                    return conn;
+                }
+            }
+        }
+
+        return null;
     }
 
     public ClientInfo getClientInfo(int connId) {
@@ -333,22 +318,6 @@ public class ConnectionManager {
         }
 
         return null;
-    }
-
-    public int getConnectionsCount() {
-        return mConnections.size();
-    }
-
-    public Integer[] getConnectionIds() {
-        Integer[] ret;
-        synchronized (mConnections) {
-            Set<Integer> keySet = mConnections.keySet();
-
-            Integer[] keyArray = new Integer[keySet.size()];
-            ret = keySet.toArray(keyArray);
-        }
-
-        return ret;
     }
 
     public boolean isIpConnected(String ip) {
@@ -364,6 +333,10 @@ public class ConnectionManager {
         return false;
     }
 
+    public boolean hasPendingConnectRequest(String ipAddress) {
+        return null != mConnectionCreationHandler.getPendingConnectRequest(ipAddress);
+    }
+
     private Integer generateConnectionId() {
         synchronized (mConnections) {
             sConnIdBase += 1;
@@ -374,11 +347,12 @@ public class ConnectionManager {
         return sConnIdBase;
     }
 
-    public void stopAllConnections() {
+    public void disconnectAllConnections() {
         Log.d(TAG, "disconnectAllConnections");
         mStopped = true;
 
         HostSearchHandler.getInstance(mContext).stopSearch(SERVER_SEARCH_CANCELED);
+        mConnectionCreationHandler.cancelAllRequests();
 
         synchronized (mHostConnList) {
             for(HostConnection hostConn: mHostConnList) {
@@ -391,6 +365,10 @@ public class ConnectionManager {
                 conn.close();
             }
         }
+    }
+
+    public void addConnection(Connection connection) {
+        mThreadHandler.obtainMessage(EVENT_CONNECTION_ADDED, connection).sendToTarget();
     }
 
     public void addListener(ConnectionManagerListener listener) {
@@ -424,37 +402,16 @@ public class ConnectionManager {
         }
     }
 
-    public void sendEvent(EventSendRequest request) {
-        mDataTracker.sendEvent(request);
+    public int getConnectionsSize() {
+        return mConnections.size();
     }
 
-    private void tryReconnectTo(Connection connection, int disconnectReason) {
-        logConnectReqeustList();
+    public boolean isReconnectAllowed() {
+        return mReconnectFlag;
+    }
 
-        if (connection == null) {
-            Log.d(TAG, "tryReconnectTo, connection should be not null here...");
-            return;
-        }
-
-        ConnectRequest request = connection.getReconnectRequest();
-
-        if (request == null && hasPendingConnectRequest(connection.getIp())) {
-            Log.d(TAG, "tryReconnectTo, reconnect request existed, id:" + connection.getId()
-                    + ", ip:" + connection.getIp());
-            return;
-        }
-
-        if (request.retryCount == 0) {
-            request.disconnectReason = disconnectReason;
-        }
-
-        Log.d(TAG, "tryReconnectTo, " + request.toString());
-
-        request.retryCount ++;
-
-        Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CONNECT, request);
-
-        mThreadHandler.sendMessageDelayed(msg, RECONNECT_DELAY_TIMESTAMP);
+    public void sendEvent(EventSendRequest request) {
+        mDataTracker.sendEvent(request);
     }
 
     private boolean isReconnectAllowed(Connection connection, int reason) {
@@ -462,8 +419,6 @@ public class ConnectionManager {
                 && !mStopped
                 && connection != null
                 && !TextUtils.isEmpty(connection.getIp())
-                && connection.getReconnectCount() < MAX_RECONNECT_COUNT
-                && !connection.isHost()
                 && (reason == Connection.CONNECTION_REASON_CODE_IO_EXCEPTION)) {
             return true;
         }
@@ -471,313 +426,22 @@ public class ConnectionManager {
         return false;
     }
 
-    private void handleConnectRequest(ConnectRequest request) {
-        Log.d(TAG, "handleConnectRequest, request:" + request);
-        if (mStopped) {
-            Log.d(TAG, "handleConnectRequest, mStopped is true");
-            removeConnectRequest(request.ipAddress);
-
-            notifyConnectionCreationResult(null,
-                    request.listener,
-                    true,
-                    Connection.CONNECTION_REASON_CODE_CONNECT_REQUEST_CANCELED);
-            return;
-        }
-        connectToInternal(request.ipAddress,
-                request.port,
-                request.listener,
-                request);
-    }
-
     public void connectTo(final String ipAddress, int port,
-                          final ConnectionCreationCallback listener) {
-
-        logConnectReqeustList();
-
-        if (hasPendingConnectRequest(ipAddress)) {
-            notifyConnectionCreationResult(null,
-                    listener,
-                    false,
-                    Connection.CONNECTION_REASON_CODE_CONNECT_REQUEST_EXISTED);
-            return;
-        }
-        ConnectRequest request = generateReconnectRequest(-1,
-                ipAddress,
-                port,
-                0,
-                listener);
-
-        Log.d(TAG, "connectTo, " + request.toString());
-
-        Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CONNECT, request);
-        msg.sendToTarget();
-        //connectToInternal(ipAddress, port, listener, null);
-    }
-
-    /*
-     * @param connId: used for reconnect to specify id of new created connection
-     */
-    private void connectToInternal(final String ipAddress, int port,
-                                   final ConnectionCreationCallback listener,
-                                   final ConnectRequest request) {
-        // cancel stop flag when one connectToInternal requst come
-        mStopped = false;
-        logConnectionList();
-
-        if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() < 2)) {
-            if (request != null) {
-                removeConnectRequest(ipAddress);
-            }
-
-            notifyConnectionCreationResult(null,
-                    listener,
-                    true,
-                    Connection.CONNECTION_REASON_CODE_CONNECT_ALREADY_CONNECTED);
-            return;
-        }
-
-        if (request == null && hasPendingConnectRequest(ipAddress)) {
-            Log.d(TAG, "connectToInternal, one reconnect request existed for id:" + ipAddress);
-
-            notifyConnectionCreationResult(null,
-                    listener,
-                    false,
-                    Connection.CONNECTION_REASON_CODE_CONNECT_REQUEST_EXISTED);
-            return;
-        }
-
-        Log.d(TAG, "connectToInternal ip:" + ipAddress + ", request:" + request);
-
-        Connection connection =
-                ConnectionFactory.createConnection(ipAddress,
-                        port,
-                        request,
-                        new Connection.ConnectionListener() {
-                    @Override
-                    public void onConnected(Connection conn) {
-                        Log.d(TAG, "connectToInternal, onConnected for " + conn.getIp()
-                                + ", ipAddress:" + ipAddress + ", mStopped:" + mStopped);
-                        onConnectionCreationSuccess(conn, listener);
-                        conn.removeListener(this);
-                    }
-
-                    @Override
-                    public void onConnectFailed(Connection conn, int reasonCode) {
-                        Log.d(TAG, "connectToInternal, onConnectFailed for " + conn.getIp()
-                                + ", ipAddress:" + ipAddress);
-                        onConnectionCreationFailed(conn, reasonCode, listener);
-                        conn.removeListener(this);
-                    }
-
-                    @Override
-                    public void onClosed(Connection conn, int reasonCode) {
-                        Log.d(TAG, "connectToInternal, onClosed for " + conn.getIp()
-                                + ", ipAddress:" + ipAddress);
-                        onConnectionCreationFailed(conn, reasonCode, listener);
-                        conn.removeListener(this);
-                    }
-                });
-
-        if (connection != null) {
-            connection.setConnectRequest(request);
-        } else {
-            Log.e(TAG, "new connection failed...");
-        }
-
-        if (listener != null) {
-            Message msg = mThreadHandler.obtainMessage(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
-            mThreadHandler.sendMessageDelayed(msg, CONNECTION_CREATION_TIMEOUT_TIMESTAMP);
-        }
-    }
-
-    private ConnectRequest generateReconnectRequest(int connId,
-                                                    String ipAddress,
-                                                    int port,
-                                                    int disconnectReason,
-                                                    ConnectionCreationCallback listener) {
-        ConnectRequest request;
-        synchronized (mReconnectRequestList) {
-            request = new ConnectRequest(connId, ipAddress,
-                    port, disconnectReason, 0, listener);
-
-            mReconnectRequestList.add(request);
-        }
-
-        Log.d(TAG, "generateReconnectRequest, request:" + (request != null ? request : null));
-
-        return request;
-    }
-
-    private ConnectRequest getReconnectRequest(int connId) {
-        Log.d(TAG, "getReconnectRequest, connId:" + connId);
-        Connection connection = getConnection(connId);
-        String ipAddress = connection != null ? connection.getIp() : "";
-
-        synchronized (mReconnectRequestList) {
-            if (mReconnectRequestList.size() > 0 && !TextUtils.isEmpty(ipAddress)) {
-                for (ConnectRequest request : mReconnectRequestList) {
-                    if (TextUtils.equals(ipAddress, request.ipAddress)) {
-                        Log.d(TAG, "getReconnectRequest, request:" + request);
-                        return request;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private ConnectRequest getReconnectRequest(String ipAddress) {
-        Log.d(TAG, "getReconnectRequest, ipAddress:" + ipAddress);
-
-        synchronized (mReconnectRequestList) {
-            if (mReconnectRequestList.size() > 0 && !TextUtils.isEmpty(ipAddress)) {
-                for (ConnectRequest request : mReconnectRequestList) {
-                    if (TextUtils.equals(ipAddress, request.ipAddress)) {
-                        Log.d(TAG, "getReconnectRequest, request:" + request);
-                        return request;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    public boolean hasPendingConnectRequest(String ipAddress) {
-        Log.d(TAG, "hasPendingConnectRequest, ipAddress:" + ipAddress);
-        synchronized (mReconnectRequestList) {
-            if (mReconnectRequestList.size() > 0) {
-                logConnectReqeustList();
-
-                for (ConnectRequest request : mReconnectRequestList) {
-                    Log.d(TAG, "hasPendingConnectRequest, request ip:" + request.ipAddress);
-                    if (TextUtils.equals(ipAddress, request.ipAddress)) {
-                        Log.d(TAG, "hasPendingConnectRequest, true for ip:" + ipAddress);
-                        return true;
-                    }
-                }
-            }
-        }
-
-        Log.d(TAG, "hasPendingConnectRequest, false for reconnecting:" + ipAddress);
-
-        return false;
-    }
-
-    public boolean hasPendingConnectRequest(int connId) {
-        logConnectReqeustList();
-
-        ConnectRequest request = getReconnectRequest(connId);
-
-        Log.d(TAG, "hasPendingConnectRequest:" + (request != null));
-        return request != null;
-    }
-
-    private void removeConnectRequest(String ipAddress) {
-        logConnectReqeustList();
-
-        Log.d(TAG, "removeConnectRequest, ipAddress:" + ipAddress);
-        ConnectRequest request = getReconnectRequest(ipAddress);
+                          final ConnectionCreationResponse response) {
+        ConnectionCreationRequest request =
+                mConnectionCreationHandler.getPendingConnectRequest(ipAddress);
 
         if (request != null) {
-            synchronized (mReconnectRequestList) {
-                Log.d(TAG, "removeConnectRequest, request:" + request);
-                mReconnectRequestList.remove(request);
-            }
-        }
-    }
-
-    private void logConnectReqeustList() {
-        Log.d(TAG, "logConnectRequestList, size:"  + mReconnectRequestList.size());
-        synchronized (mReconnectRequestList) {
-            if (mReconnectRequestList.size() > 0) {
-                for (ConnectRequest request : mReconnectRequestList) {
-                    Log.d(TAG, "    "  + request.toString());
-                }
-            }
-        }
-    }
-
-    private void onConnectionCreationSuccess(Connection conn,
-                                            ConnectionCreationCallback listener) {
-        // if all connections is stopped, then we notify failed here.
-        // connection already closed case not handled here. it put to connection.addlistener.
-        removeConnectionCreationTimeoutEvent(conn);
-        if (!mStopped) {
-            mThreadHandler
-                    .obtainMessage(EVENT_CONNECTION_ADDED, conn)
-                    .sendToTarget();
-
-            notifyConnectionCreationResult(conn, listener, true, 0);
-        } else {
-            notifyConnectionCreationResult(conn,
-                    listener,
-                    false,
-                    Connection.CONNECTION_REASON_CODE_CONNECT_REQUEST_CANCELED);
-        }
-    }
-
-    /*
-     * Connection creation failed not only means connection new failed. Socket of connection
-     * connected failed is also this case.
-     */
-    private void onConnectionCreationFailed(Connection conn,
-                                            int reason,
-                                            ConnectionCreationCallback listener) {
-        removeConnectionCreationTimeoutEvent(conn);
-
-        if (isReconnectAllowed(conn, reason)) {
-            Log.d(TAG, "onConnectionCreationFailed, allowed to reconnect to " + conn.getIp());
-            tryReconnectTo(conn,
-                    reason);
-        } else {
-            removeConnectRequest(conn.getIp());
-            // listener is null and reconnect request not null means
-            // current connection creation is one reconnect failed case.
-            // notify disconnect needed.
-            if (conn.getReconnectRequest() != null && listener == null) {
-                mThreadHandler
-                        .obtainMessage(EVENT_CONNECTION_CLOSED,
-                                conn.getReconnectRequest().disconnectReason,
-                                1,
-                                conn)
-                        .sendToTarget();
-            } else {
-                notifyConnectionCreationResult(conn, listener, false, reason);
-            }
-        }
-    }
-
-    private void notifyConnectionCreationResult(Connection connection,
-                                                ConnectionCreationCallback listener,
-                                                boolean ret,
-                                                int reason) {
-        Log.d(TAG, "notifyConnectionCreationResult response:" + listener + ", ret:" + ret);
-        if (listener == null) {
+            Log.d(TAG, "connectTo, has pending connect request:" + request.toString());
+            request.addResponse(response);
             return;
         }
 
-        listener.onResult(ret, reason);
-    }
+        request = ConnectionCreationRequest.generateConnectRequest(ipAddress,
+                port, 2, response);
 
-    // this time out event should be removed once connection has feedback (connect success
-    // or failed.)
-    private void removeConnectionCreationTimeoutEvent(Connection connection) {
-        if (connection != null) {
-            mThreadHandler.removeMessages(EVENT_CONNECTION_CREATION_TIMEOUT, connection);
-            Log.d(TAG, "removeConnectionCreationTimeoutEvent, connection:" + connection);
-        }
-    }
-
-    private void handleConnectionCreationTimeoutEvent(Connection connection) {
-        Log.d(TAG, "handleConnectionCreationTimeoutEvent! state:" + connection.getState());
-
-        if (connection != null
-                && connection.getState() != Connection.CONNECTION_STATE_CONNECTED
-                && connection.getState() != Connection.CONNECTION_STATE_CLOSEED) {
-            connection.close(Connection.CONNECTION_REASON_CODE_CONNECT_TIMEOUT);
-        }
+        Log.d(TAG, "connectTo, " + request.toString());
+        mConnectionCreationHandler.processConnectCreationRequest(request);
     }
 
     private HostConnection.HostConnectionListener mHostListener =
@@ -879,14 +543,6 @@ public class ConnectionManager {
             public void onSearchCanceled(int reason) {
                 Log.d(TAG, "searchHost, onSearchCanceled reason:" + reason);
                 notifySearchCanceled(reason);
-            }
-
-            @Override
-            public void onConnectionConnected(Connection connection) {
-                Log.d(TAG, "searchHost, onConnectionConnected, ip:" + connection.getIp());
-                mThreadHandler
-                        .obtainMessage(EVENT_CONNECTION_ADDED, connection)
-                        .sendToTarget();
             }
         });
     }

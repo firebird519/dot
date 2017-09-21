@@ -82,28 +82,24 @@ public class Connection {
      * indicate current connection state
      */
     private int mState;
-    private Object mConnData = null;
+    private int mId = -1;
+    private boolean mIsHost;
+        private Object mConnData = null;
     private String mIpAddress;
     private int mPort;
 
-    private int mToBeClosedReason = 100;
-
-    private int mId = -1;
-
-    private boolean mIsHost;
-
-    private ConnectionManager.ConnectRequest mConnectRequest;
+    private int mToBeClosedReason = 0;
 
     private boolean mIsDataSending;
     private boolean mIsDataReceiving;
 
+    private static final long RECEIVE_WAKE_LOCK_TIMESTAMP = 2000; //2s
     private static final int HEART_BEAT_TIMESTAMP = 5*60*1000; //5 min
 
     private Handler mThreadHandler;
     private Object mSendBlockObj = new Object();
     private PowerManager.WakeLock mSendWakeLock;
     private PowerManager.WakeLock mReceiveWakeLock;
-    private static final long RECEIVE_WAKE_LOCK_TIMESTAMP = 2000; //2s
 
     private class ThreadHandler extends Handler {
         static final int EVENT_HEART_BEAT = 0;
@@ -129,27 +125,16 @@ public class Connection {
         }
     }
 
-    public Connection(Socket socket, boolean isHost) {
-        this(socket, isHost, null);
-    }
-
-    public Connection(Socket socket,
-                      boolean isHost,
-                      final ConnectionManager.ConnectRequest request) {
-        Log.d(TAG, "socket:" + socket + ", isHost:" + isHost + ", request:" + request);
-
+    public Connection(int connId, Socket socket, boolean isHost) {
+        Log.d(TAG, "connId:" + connId + ", socket:" + socket + ", isHost:" + isHost);
         mSocket = socket;
         mIsHost = isHost;
-
         if (mIsHost) {
             TAG += "-HOST";
         }
 
-        if (request != null) {
-            mId = request.connId;
-
-            TAG += ":" + mId;
-            mConnectRequest = request;
+        if (connId >= 0) {
+            setId(connId);
         }
 
         HandlerThread thread = new HandlerThread("connectionHandlerThread");
@@ -188,18 +173,6 @@ public class Connection {
         return mPort;
     }
 
-    public int getReconnectCount() {
-        return mConnectRequest != null ? mConnectRequest.retryCount : 0;
-    }
-
-    public void setConnectRequest(ConnectionManager.ConnectRequest request) {
-        mConnectRequest = request;
-    }
-
-    public ConnectionManager.ConnectRequest getReconnectRequest() {
-        return mConnectRequest;
-    }
-
     public void setWakeLock(PowerManager.WakeLock sendWakeLock,
                             PowerManager.WakeLock receiveWakeLock) {
         mSendWakeLock = sendWakeLock;
@@ -227,11 +200,12 @@ public class Connection {
     }
 
     public void setId(final int id) {
-        mId = id;
-
-        TAG = TAG + ":" + id;
-
         Log.d(TAG, "setId, id:" + id + ", ip:" + getIp());
+
+        if (mId != id) {
+            TAG = TAG + "-" + id;
+            mId = id;
+        }
     }
 
     public int getId() {
@@ -254,10 +228,6 @@ public class Connection {
     private void setState(int state) {
         Log.d(TAG, "setState, state:" + state + ", pre state:" + mState);
         mState = state;
-
-        if (mState == CONNECTION_STATE_CONNECTED) {
-            mConnectRequest = null;
-        }
     }
 
     public void connect(final String ip, final int port) {
@@ -457,10 +427,6 @@ public class Connection {
         }
 
         return result;
-    }
-
-    public boolean isDataSending() {
-        return mIsDataSending;
     }
 
     /*
@@ -802,7 +768,7 @@ public class Connection {
     }
 
     //=====
-    // response implementation
+    // responseList implementation
     public void addListner(ConnectionListener listener) {
         if (listener != null) {
             mListeners.add(listener);

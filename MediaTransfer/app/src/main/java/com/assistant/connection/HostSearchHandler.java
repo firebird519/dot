@@ -8,6 +8,10 @@ import com.assistant.utils.ThreadPool;
 import com.assistant.utils.IPv4Utils;
 import com.assistant.utils.Utils;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 
 /*
  * Handler server search.
@@ -31,7 +35,8 @@ public class HostSearchHandler {
     private ThreadPool mThreadPool;
     private boolean mIsSearching;
 
-    private ServerSearchListener mListener;
+    private List<ServerSearchListener> mListeners =
+            Collections.synchronizedList(new ArrayList<ServerSearchListener>());
 
     private ConnectionCreationListener mConnectionListener = new ConnectionCreationListener();
 
@@ -49,11 +54,7 @@ public class HostSearchHandler {
     }
 
     public void stopSearch(int reason) {
-        if (mListener != null && reason == SERVER_SEARCH_CANCELED) {
-            mListener.onSearchCanceled(SERVER_SEARCH_CANCELED);
-        }
-
-        clean();
+        onSearchCanceled(reason);
     }
 
     boolean isSearching() {
@@ -64,13 +65,15 @@ public class HostSearchHandler {
      * search XXX.XXX.XXX.* ip addresses which idAddress in.
      */
     public void searchServer(String ipSegment, int port, ServerSearchListener listener) {
-        // no response set, invalid server search action
+        // no responseList set, invalid server search action
         if (listener == null || TextUtils.isEmpty(ipSegment) || port <= 0) {
             Log.d(TAG,
-                    "searchServer: input parameters is not valid! response:" + listener +
+                    "searchServer: input parameters is not valid! responseList:" + listener +
                     ",ipSegment:" + ipSegment + ", port:" + port);
             return;
         }
+
+        mListeners.add(listener);
 
         if (isSearching()) {
             Log.d(TAG, "searchServer, searching...");
@@ -78,7 +81,6 @@ public class HostSearchHandler {
         }
 
         mPort = port;
-        mListener = listener;
 
         mIsSearching = true;
         resetSearchIpMask();
@@ -162,7 +164,7 @@ public class HostSearchHandler {
         }
 
         mThreadPool = null;
-        mListener = null;
+        mListeners = null;
 
         // release self if possible.
         resetSearchIpMask();
@@ -234,11 +236,7 @@ public class HostSearchHandler {
 
             // search end. notify failed and do necessary clean
             if (!hasSearchingMask()) {
-                if (mListener != null) {
-                    mListener.onSearchCompleted();
-                }
-
-                clean();
+                onSearchCompleted();
             }
             return;
         }
@@ -278,9 +276,8 @@ public class HostSearchHandler {
         if (success && mIsSearching) {
             setIpMask(connection.getIp(), IP_MARK_CONNECTED);
 
-            if (mListener != null) {
-                mListener.onConnectionConnected(connection);
-            }
+            ConnectionManager.getInstance(mContext).addConnection(connection);
+            // add connection
         } else {
             Log.d(TAG, "handleConnectionCreationResult,  search failed or canceled for ip:"
                     + connection.getIp());
@@ -291,12 +288,28 @@ public class HostSearchHandler {
         // search end. notify failed and do necessary clean
         if (!hasSearchingMask()) {
             Log.d(TAG, "handleConnectionCreationResult,  search ended!");
-            if (mListener != null) {
-                mListener.onSearchCompleted();
-            }
-
-            clean();
+            onSearchCompleted();
         }
+    }
+
+    private void onSearchCompleted() {
+        mIsSearching = false;
+
+        for(ServerSearchListener listener : mListeners) {
+            listener.onSearchCompleted();
+        }
+
+        clean();
+    }
+
+    private void onSearchCanceled(int reason) {
+        mIsSearching = false;
+
+        for(ServerSearchListener listener : mListeners) {
+            listener.onSearchCanceled(reason);
+        }
+
+        clean();
     }
 
     class ConnectionCreateTask implements Runnable {
@@ -317,13 +330,12 @@ public class HostSearchHandler {
             }
 
             Log.d(TAG, "ConnectionCreateTask, ip:" + ip + ", createConnection");
-            ConnectionFactory.createConnection(ip, port, null, mConnectionListener);
+            ConnectionFactory.createConnection(ip, port, mConnectionListener);
             Log.d(TAG, "ConnectionCreateTask, ip:" + ip + ", createConnection completed!");
         }
     }
 
     public interface ServerSearchListener {
-        void onConnectionConnected(Connection connection);
         void onSearchCompleted();
         void onSearchCanceled(int reason);
     }
