@@ -275,7 +275,7 @@ public class ConnectionManager {
                         }
                     });
 
-                    mConnectionCreationHandler.processConnectCreationRequest(request);
+                    mConnectionCreationHandler.processConnectCreationRequest(request, connectDelay);
                 } else {
                     mDataTracker.onConnectionRemoved(connection.getId());
                     mThreadHandler

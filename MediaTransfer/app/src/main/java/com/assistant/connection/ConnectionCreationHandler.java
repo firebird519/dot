@@ -161,7 +161,8 @@ public class ConnectionCreationHandler extends Handler {
             if (request.retryTimes > 0
                     && mConnectionManager.isReconnectAllowed()
                     && null == mConnectionManager.getConnection(request.ipAddress)) {
-                processConnectCreationRequest(request, RECONNECT_DELAY_TIMESTAMP);
+                processConnectCreationRequest(request,
+                        RECONNECT_DELAY_TIMESTAMP);
                 return true;
             }
         }
