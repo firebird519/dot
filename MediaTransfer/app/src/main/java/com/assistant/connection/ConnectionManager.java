@@ -59,12 +59,6 @@ public class ConnectionManager {
         }
 
         @Override
-        public void onConnectFailed(Connection conn, int reasonCode) {
-            Log.d(TAG, "connection connected failed for ip:" + conn.getIp()
-                    + ", reason:" + reasonCode + ", impossible case!");
-        }
-
-        @Override
         public void onClosed(Connection conn, int reasonCode) {
             Log.d(TAG, "connection closed for ip:" + conn.getIp() + ", id:" + conn.getId()
                     + ", reason:" + reasonCode);
@@ -488,7 +482,7 @@ public class ConnectionManager {
                 mHostConnList.add(hostConnection);
             }
         } else {
-            // TODO:
+            Log.d(TAG, "listen failed!");
         }
     }
 

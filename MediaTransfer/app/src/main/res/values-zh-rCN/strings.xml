@@ -29,6 +29,7 @@
 
     <string name="file">文件:</string>
     <string name="send">发送</string>
+    <string name="file_not_existed">文件不存在!</string>
 
     <!-- chat List view option menu-->
     <string name="chat_option_header">选择操作</string>

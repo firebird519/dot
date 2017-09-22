@@ -40,25 +40,21 @@ public class FileChooserAdapter extends BaseAdapter {
 
     @Override
     public int getCount() {
-        // TODO Auto-generated method stub
         return mFileLists.size();
     }
 
     @Override
     public FileInfo getItem(int position) {
-        // TODO Auto-generated method stub
         return mFileLists.get(position);
     }
 
     @Override
     public long getItemId(int position) {
-        // TODO Auto-generated method stub
-        return 0;
+        return position;
     }
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-        // TODO Auto-generated method stub
         View view = null;
         ViewHolder holder = null;
         if (convertView == null || convertView.getTag() == null) {
@@ -72,7 +68,7 @@ public class FileChooserAdapter extends BaseAdapter {
         }
 
         FileInfo fileInfo = getItem(position);
-        //TODO
+        //TODO:
 
         holder.tvFileName.setText(fileInfo.getFileName());
 

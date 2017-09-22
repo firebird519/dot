@@ -507,7 +507,6 @@ public class ConnectionDataTracker extends Handler {
 
             buf.put("[v:".getBytes());
 
-            // TODO: simple data structure...
             //Log.d(TAG, "p1:" + buf.position());
             buf.putLong(1);
             //Log.d(TAG, "p2:" + buf.position());

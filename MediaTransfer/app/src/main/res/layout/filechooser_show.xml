@@ -4,44 +4,43 @@
     android:layout_height="match_parent"
     android:orientation="horizontal"
     android:padding="5.0dip">
-
-    <Button
-        android:id="@+id/imgBackFolder"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentRight="true"
-        android:layout_margin="2dip"
-        android:adjustViewBounds="true"
-        android:text="@string/back"
-        android:visibility="gone"/>
-
     <TextView
-        android:id="@+id/tvPath"
+        android:id="@+id/cur_path"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_alignParentLeft="true"
-        android:layout_alignTop="@id/imgBackFolder"
         android:layout_marginRight="2dip"
-        android:layout_toLeftOf="@id/imgBackFolder"
         android:gravity="left"
         android:textColor="#FFA500"
         android:textSize="16sp"
         android:visibility="gone"/>
 
-    <Button
-        android:id="@+id/btExit"
+    <LinearLayout
+        android:id="@+id/button_panel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:gravity="center"
-        android:text="@string/quit"></Button>
+        android:orientation="horizontal">
+        <Button
+            android:id="@+id/exit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/quit"/>
+        <Button
+            android:id="@+id/select"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/select"
+            android:visibility="gone"/>
+    </LinearLayout>
 
     <GridView
-        android:id="@+id/gvFileChooser"
+        android:id="@+id/file_grid_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@+id/btExit"
-        android:layout_below="@id/imgBackFolder"
+        android:layout_above="@+id/button_panel"
         android:clickable="true"
         android:columnWidth="90dp"
         android:horizontalSpacing="10dp"
@@ -50,7 +49,7 @@
         android:verticalSpacing="10dp" />
 
     <TextView
-        android:id="@+id/tvEmptyHint"
+        android:id="@+id/empty_hint"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_centerInParent="true"

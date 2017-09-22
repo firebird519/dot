@@ -41,7 +41,6 @@ public class Connection {
 
     public interface ConnectionListener {
         void onConnected(Connection connection);
-        void onConnectFailed(Connection connection, int reasonCode);
         void onClosed(Connection connection, int reasonCode);
     }
 
@@ -98,6 +97,8 @@ public class Connection {
 
     private Handler mThreadHandler;
     private Object mSendBlockObj = new Object();
+
+    // TODO: consider new way to handle wakelock.
     private PowerManager.WakeLock mSendWakeLock;
     private PowerManager.WakeLock mReceiveWakeLock;
 
@@ -144,13 +145,11 @@ public class Connection {
         if (socket != null) {
             mPort = socket.getPort();
             mIpAddress = socket.getInetAddress().getHostAddress();
+        }
 
-            if (socket.isConnected()) {
-                setState(CONNECTION_STATE_CONNECTED);
-                initSocketSteam();
-            } else {
-                setState(CONNECTION_STATE_NOT_CONNECTED);
-            }
+        if (socket != null && socket.isConnected()) {
+            setState(CONNECTION_STATE_CONNECTED);
+            initSocketSteam();
         } else {
             setState(CONNECTION_STATE_NOT_CONNECTED);
         }
@@ -712,16 +711,14 @@ public class Connection {
         }
 
         if (!mIsDataSending) {
+            setState(CONNECTION_STATE_CLOSEED);
             mToBeClosedReason = 0;
             mLastReasonCode = reason;
 
             closeSocket();
 
-            if (mSendWakeLock != null && mSendWakeLock.isHeld()) {
-                mSendWakeLock.release();
-            }
+            releaseSendWakeLock();
 
-            setState(CONNECTION_STATE_CLOSEED);
             notifyClosed(reason);
         } else {
             mToBeClosedReason = reason;
@@ -786,12 +783,6 @@ public class Connection {
     private void notifyConnected() {
         for (ConnectionListener listener : mListeners) {
             listener.onConnected(this);
-        }
-    }
-
-    private void notifyConnectFailed(int reason) {
-        for (ConnectionListener listener : mListeners) {
-            listener.onConnectFailed(this, reason);
         }
     }
 

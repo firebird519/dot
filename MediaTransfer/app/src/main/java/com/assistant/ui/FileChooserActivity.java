@@ -1,15 +1,15 @@
 package com.assistant.ui;
 
 import android.app.Activity;
+import android.app.Fragment;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
-import android.support.v7.app.AppCompatActivity;
 import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
-import android.view.Window;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.GridView;
@@ -23,28 +23,35 @@ import java.util.ArrayList;
 
 import com.assistant.ui.FileChooserAdapter.FileInfo;
 
+import com.assistant.utils.Log;
+
 public class FileChooserActivity extends BaseAppCompatActivity {
-    public static final String EXTRA_FILE_CHOOSER = "file_chooser";
+    public static final String EXTRA_FILE_PATH_NAME = "file_path_name";
+    public static final String EXTRA_CHOOSER_TYPE = "file_chooser_type"; // file or folder
+
+    public static final int CHOOSE_TYPE_FILE = 0;
+    public static final int CHOOSE_TYPE_FOLDER = 1;
 
     private GridView mGridView;
-    private View mBackView;
-    private View mBtExit;
-    private TextView mTvPath;
+    private View mBtnExit;
+    private View mBtnSelect;
+    private TextView mCurPath;
 
-    private String mSdcardRootPath;  //sdcard 根路�?
-    private String mLastFilePath;    //当前显示的路�?
+    private int mChooseType = CHOOSE_TYPE_FILE;
+
+    private String mSdcardRootPath;  //sdcard 根路
+    private String mLastFilePath;    //当前显示的路
     private ArrayList<FileChooserAdapter.FileInfo> mFileLists;
     private FileChooserAdapter mAdatper;
     private OnClickListener mClickListener = new OnClickListener() {
         public void onClick(View v) {
             switch (v.getId()) {
-                case R.id.imgBackFolder:
-                    backProcess();
-                    break;
-                case R.id.btExit:
+                case R.id.exit:
                     setResult(RESULT_CANCELED);
                     finish();
                     break;
+                case R.id.select:
+                    onSelected(mLastFilePath);
                 default:
                     break;
             }
@@ -53,14 +60,11 @@ public class FileChooserActivity extends BaseAppCompatActivity {
     private OnItemClickListener mItemClickListener = new OnItemClickListener() {
         public void onItemClick(AdapterView<?> adapterView, View view, int position,
                                 long id) {
-            FileInfo fileInfo = (FileInfo)(((FileChooserAdapter) adapterView.getAdapter()).getItem(position));
+            FileInfo fileInfo = (((FileChooserAdapter) adapterView.getAdapter()).getItem(position));
             if (fileInfo.isDirectory())
                 updateFileItems(fileInfo.getFilePath());
             else if (true/*fileInfo.isPPTFile()*/) {
-                Intent intent = new Intent();
-                intent.putExtra(EXTRA_FILE_CHOOSER, fileInfo.getFilePath());
-                setResult(RESULT_OK, intent);
-                finish();
+                onSelected(fileInfo.getFilePath());
             } else {
                 toast(getText(R.string.open_file_error_format));
             }
@@ -76,19 +80,64 @@ public class FileChooserActivity extends BaseAppCompatActivity {
 
         mSdcardRootPath = Environment.getExternalStorageDirectory().getAbsolutePath();
 
-        setTitle(mSdcardRootPath);
+        getSupportActionBar().setSubtitle(mSdcardRootPath);
 
-        mBackView = findViewById(R.id.imgBackFolder);
-        mBackView.setOnClickListener(mClickListener);
-        mBtExit = findViewById(R.id.btExit);
-        mBtExit.setOnClickListener(mClickListener);
+        mBtnExit = findViewById(R.id.exit);
+        mBtnExit.setOnClickListener(mClickListener);
 
-        mTvPath = (TextView) findViewById(R.id.tvPath);
+        mBtnSelect = findViewById(R.id.select);
+        mBtnSelect.setOnClickListener(mClickListener);
 
-        mGridView = (GridView) findViewById(R.id.gvFileChooser);
-        mGridView.setEmptyView(findViewById(R.id.tvEmptyHint));
+        mCurPath = (TextView) findViewById(R.id.cur_path);
+
+        mGridView = (GridView) findViewById(R.id.file_grid_view);
+        mGridView.setEmptyView(findViewById(R.id.empty_hint));
         mGridView.setOnItemClickListener(mItemClickListener);
         setGridViewAdapter(mSdcardRootPath);
+
+        initAccordingToChooseType();
+    }
+
+    public static void showChooseFileActivity(Fragment fragment, Context context, int type,
+                                              int requestCode) {
+        Log.d("FileChooserActivity", "showChooseFileActivity, type:" + type
+                + ", context:" + fragment + ", requestCode:" + requestCode);
+        if (fragment == null) {
+            return;
+        }
+
+        Intent intent = new Intent();
+        intent.setClass(context, FileChooserActivity.class);
+
+        intent.putExtra(EXTRA_CHOOSER_TYPE, type);
+
+        fragment.startActivityForResult(intent, requestCode);
+    }
+
+    private void initAccordingToChooseType() {
+        Intent intent = getIntent();
+
+        if (intent != null && intent.hasExtra(EXTRA_CHOOSER_TYPE)) {
+            mChooseType = intent.getIntExtra(EXTRA_CHOOSER_TYPE, CHOOSE_TYPE_FILE);
+        }
+
+        if (mChooseType == CHOOSE_TYPE_FOLDER) {
+            getSupportActionBar().setTitle(R.string.select_folder_title);
+            mBtnSelect.setVisibility(View.VISIBLE);
+        } else {
+            getSupportActionBar().setTitle(R.string.select_file_title);
+            mBtnSelect.setVisibility(View.GONE);
+        }
+    }
+
+    private void onSelected(String pathName) {
+        Log.d(this, "onSelected, pathName:" + pathName);
+
+        Intent intent = new Intent();
+        intent.putExtra(EXTRA_FILE_PATH_NAME, pathName);
+        setResult(RESULT_OK, intent);
+
+        finish();
     }
 
     @Override
@@ -117,12 +166,12 @@ public class FileChooserActivity extends BaseAppCompatActivity {
 
     private void updateFileItems(String filePath) {
         mLastFilePath = filePath;
-        mTvPath.setText(mLastFilePath);
+        mCurPath.setText(mLastFilePath);
 
-        setTitle(mLastFilePath);
+        getSupportActionBar().setSubtitle(mLastFilePath);
 
         if (mFileLists == null)
-            mFileLists = new ArrayList<FileChooserAdapter.FileInfo>();
+            mFileLists = new ArrayList<>();
         if (!mFileLists.isEmpty())
             mFileLists.clear();
 

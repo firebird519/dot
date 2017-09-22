@@ -19,6 +19,7 @@ public class ConnectionFactory {
         HostConnection host  = new HostConnection();
         if (0 != host.listen(port, wakeLock, listener)) {
             // some error happened. null will be returned!
+            host.close();
             return null;
         }
 

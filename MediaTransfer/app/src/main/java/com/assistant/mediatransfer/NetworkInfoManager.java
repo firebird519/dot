@@ -104,7 +104,6 @@ public class NetworkInfoManager {
         return dhcpInfo.serverAddress;
     }
 
-    // TODO: need change name to one common one
     // only support IPv4 address
     @SuppressWarnings("deprecation")
     public String getWifiDhcpServerAddressString() {

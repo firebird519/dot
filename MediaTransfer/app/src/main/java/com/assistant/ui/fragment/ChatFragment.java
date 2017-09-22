@@ -21,6 +21,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.assistant.R;
 import com.assistant.connection.ConnectionManager;
@@ -34,11 +35,13 @@ import com.assistant.utils.FileOpenIntentUtils;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.List;
 
 import static android.app.Activity.RESULT_OK;
-import static com.assistant.ui.FileChooserActivity.EXTRA_FILE_CHOOSER;
 
 public class ChatFragment extends Fragment {
     private static final String TAG = "ChatFragment";
@@ -51,6 +54,7 @@ public class ChatFragment extends Fragment {
     private static final int MENU_SAVE_AS_ID = 3;
 
     private final static int FILE_CHOOSER_REQUEST_CODE = 1;
+    private final static int FOLDER_CHOOSER_REQUEST_CODE = 2;
 
     private ListView mChattingListView;
     private ChattingAdapter mChattingAdapter;
@@ -62,6 +66,7 @@ public class ChatFragment extends Fragment {
     private LayoutInflater mLayoutInflater = null;
 
     private Context mContext;
+    private Activity mParentActivity;
 
     private int mConnId = -1;
     private ClientManager mMediaTransManager;
@@ -71,6 +76,7 @@ public class ChatFragment extends Fragment {
     private List<Event> mChatEventList;
 
     private String mSelectedFilePathName;
+    private FileEvent mSaveAsFileEvent;
 
     //2 mins, and 10s for test mode
     private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG_CONNECTION ? 10*1000 : 2*60*1000;
@@ -117,11 +123,11 @@ public class ChatFragment extends Fragment {
 
         if (event instanceof FileEvent) {
             menu.add(0, MENU_OPEN_ID, 0, R.string.open);
+            menu.add(0, MENU_SAVE_AS_ID, 0, R.string.save_as);
         }
 
         if (false) {
             menu.add(0, MENU_SEND_ID, 0, R.string.send);
-            menu.add(0, MENU_SAVE_AS_ID, 0, R.string.save_as);
         }
     }
 
@@ -164,7 +170,10 @@ public class ChatFragment extends Fragment {
         mFileChooseBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                showFileChooseActivity();
+                FileChooserActivity.showChooseFileActivity(ChatFragment.this,
+                        mContext,
+                        FileChooserActivity.CHOOSE_TYPE_FILE,
+                        FILE_CHOOSER_REQUEST_CODE);
             }
         });
         mSendBtn = (Button)view.findViewById(R.id.msg_send_btn);
@@ -224,10 +233,14 @@ public class ChatFragment extends Fragment {
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        Log.d(this, "onActivityResult, requestCode:" + requestCode
+                + ", resultcode:" + resultCode);
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
-                String filePathName = data.getStringExtra(EXTRA_FILE_CHOOSER);
+                String filePathName = data.getStringExtra(FileChooserActivity.EXTRA_FILE_PATH_NAME);
                 mSelectedFilePathName = filePathName;
+
+                Log.d(this, "onActivityResult, filePathName:" + filePathName);
 
                 if (!TextUtils.isEmpty(filePathName)) {
                     mMsgEditText.setText(mContext.getString(R.string.file) + mSelectedFilePathName);
@@ -235,18 +248,18 @@ public class ChatFragment extends Fragment {
             } else {
                 mSelectedFilePathName = "";
             }
+        } if(requestCode == FOLDER_CHOOSER_REQUEST_CODE) {
+            if (resultCode == RESULT_OK) {
+                String filePathName =
+                        data.getStringExtra(FileChooserActivity.EXTRA_FILE_PATH_NAME);
 
+                handleFileSaveAs(mSaveAsFileEvent, filePathName);
+            }
+
+            mSaveAsFileEvent = null;
         } else {
             super.onActivityResult(requestCode, resultCode, data);
         }
-    }
-
-    // TODO: support select folder.
-    private void showFileChooseActivity() {
-        Intent intent = new Intent();
-        intent.setClass(mContext, FileChooserActivity.class);
-
-        startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE);
     }
 
     private String getTimeString(long time) {
@@ -298,6 +311,55 @@ public class ChatFragment extends Fragment {
 
                 }
             });
+        }
+    }
+
+    private void handleFileSaveAs(FileEvent event, String destPath) {
+        if (event != null) {
+            if (!destPath.endsWith("/")) {
+                destPath += "/";
+            }
+
+            File destFile = new File(destPath);
+            if (!(destFile.exists() && destFile.isDirectory())) {
+                Log.d(this, "handleFileSaveAs, dest path invalid:" + destPath);
+                return;
+            }
+
+            destFile = new File(destPath + event.fileName);
+
+            if (destFile.exists()) {
+                for (int i = 0; ; i++) {
+                    destFile = new File(destPath
+                            + i + "_" + event.fileName);
+
+                    if (!destFile.exists()) {
+                        break;
+                    }
+                }
+            }
+
+            File sourceFile = new File(event.filePathName);
+            if (sourceFile.exists()) {
+                try {
+                    destFile.createNewFile();
+
+                    FileInputStream input = new FileInputStream(sourceFile);
+                    FileOutputStream output = new FileOutputStream(destFile);
+                    byte[] b = new byte[1024 * 5];
+                    int len;
+                    while ((len = input.read(b)) != -1) {
+                        output.write(b, 0, len);
+                    }
+                    output.flush();
+                    output.close();
+                    input.close();
+
+                    Toast.makeText(mContext, R.string.file_saved_success, Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    destFile.delete();
+                }
+            }
         }
     }
 
@@ -428,12 +490,22 @@ public class ChatFragment extends Fragment {
                 Log.d(this, "openFile:" + filePathName);
                 if (intent != null) {
                     mContext.startActivity(intent);
+                } else {
+                    Toast.makeText(mContext, R.string.file_not_existed, Toast.LENGTH_SHORT).show();
                 }
             }
         }
 
         public void saveFileAs(int position) {
+            Event event = getItem(position);
 
+            if (event instanceof FileEvent) {
+                mSaveAsFileEvent = (FileEvent) event;
+                FileChooserActivity.showChooseFileActivity(ChatFragment.this,
+                        mContext,
+                        FileChooserActivity.CHOOSE_TYPE_FOLDER,
+                        FOLDER_CHOOSER_REQUEST_CODE);
+            }
         }
     }
 
@@ -459,10 +531,10 @@ public class ChatFragment extends Fragment {
         mLayoutInflater = (LayoutInflater) getActivity()
                 .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 
-        Activity activity = getActivity();
-        Intent intent = activity.getIntent();
+        mParentActivity = getActivity();
+        Intent intent = mParentActivity.getIntent();
 
-        mContext = activity.getApplicationContext();
+        mContext = mParentActivity.getApplicationContext();
 
         mConnId = intent.getIntExtra(INTENT_EXTRA_CONNECTION_INDEX, -1);
 
@@ -496,6 +568,9 @@ public class ChatFragment extends Fragment {
 
     @Override
     public void onDestroy() {
+        mParentActivity = null;
+        mContext = null;
+
         super.onDestroy();
     }
 

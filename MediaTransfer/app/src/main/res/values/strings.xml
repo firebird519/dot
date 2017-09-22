@@ -29,13 +29,17 @@
 
     <string name="file">File:</string>
     <string name="send">Send</string>
+    <string name="file_not_existed">File is not existed!</string>
+    <string name="select">Select</string>
+    <string name="select_file_title">Select File</string>
+    <string name="select_folder_title">Select Folder</string>
+    <string name="file_saved_success">File saved success!</string>
 
     <!-- chat List view option menu-->
     <string name="chat_option_header">Select operation</string>
     <string name="delete">Delete</string>
     <string name="open">Open</string>
     <string name="save_as">Save as</string>
-
 
     <string name="chat_input_view_hint">Input text...</string>
     <string name="chat_send_failed">message send failed, please try again...</string>

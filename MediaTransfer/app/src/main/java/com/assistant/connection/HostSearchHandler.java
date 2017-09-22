@@ -42,7 +42,7 @@ public class HostSearchHandler {
 
     private HostSearchHandler(Context context) {
         mContext = context;
-        mPort = 0; //TODO: add one default port
+        mPort = ConnectionManager.DEFAULT_PORT;
     }
 
     public static HostSearchHandler getInstance(Context context) {
@@ -254,13 +254,6 @@ public class HostSearchHandler {
             Log.d(TAG, "IP:" + connection.getIp() + " connected!");
             connection.removeListener(this);
             handleConnectionCreationResult(connection, true);
-        }
-
-        @Override
-        public void onConnectFailed(Connection connection, int reasonCode) {
-            Log.d(TAG, "IP:" + connection.getIp() + " connect failed!");
-            connection.removeListener(this);
-            handleConnectionCreationResult(connection, false);
         }
 
         @Override

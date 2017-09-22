@@ -235,14 +235,6 @@ public class ConnectionCreationHandler extends Handler {
         }
 
         @Override
-        public void onConnectFailed(Connection conn, int reasonCode) {
-            Log.d(TAG, "ConnectionListener, onConnectFailed for " + conn.getIp()
-                    + ", ipAddress:" + conn.getIp());
-            onResponse(mRequest, conn, reasonCode);
-            conn.removeListener(this);
-        }
-
-        @Override
         public void onClosed(Connection conn, int reasonCode) {
             Log.d(TAG, "ConnectionListener, onClosed for " + conn.getIp()
                     + ", ipAddress:" + conn.getIp());

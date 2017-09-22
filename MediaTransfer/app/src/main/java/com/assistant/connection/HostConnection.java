@@ -143,6 +143,8 @@ public class HostConnection {
             }
 
             notifySocketClosed(errorCode);
+
+            mListeners.clear();
         }
     }
 

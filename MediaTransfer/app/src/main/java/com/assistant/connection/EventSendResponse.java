@@ -11,6 +11,5 @@ public interface EventSendResponse {
 
     void onSendProgress(long eventId, int percent);
 
-    // TODO: define failed reason code
     void onResult(int connId, long eventId, int result, int failedReason);
 }
