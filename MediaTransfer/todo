@@ -13,6 +13,7 @@
 13. support client still display when connection disconnected and add delete function in listview
     to remove disconnected client.
 14. add clear cache in settings
+15. share connected ip for new client
 
 
 http://blog.csdn.net/yyh352091626/article/details/50542554

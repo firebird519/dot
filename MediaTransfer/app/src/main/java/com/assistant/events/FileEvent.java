@@ -4,7 +4,7 @@ import com.assistant.utils.Utils;
 
 public class FileEvent extends Event {
     // not serialized by gson.
-    public transient String filePathName;
+    public transient String tempFilePathName;
 
     public String fileName;
     public long fileLastWriteTime;
@@ -23,7 +23,7 @@ public class FileEvent extends Event {
     public FileEvent(int connectionId, String pathName, long curTime) {
         super(connectionId, curTime);
 
-        filePathName = pathName;
+        tempFilePathName = pathName;
     }
 
     @Override
@@ -32,7 +32,7 @@ public class FileEvent extends Event {
         if (Utils.DEBUG) {
             log = "FileEvent - " + super.toString()
                     + ", fileName:" + fileName
-                    + ", temp file:" + filePathName;
+                    + ", temp file:" + tempFilePathName;
         } else {
             log = "FileEvent";
         }

@@ -36,7 +36,7 @@ import java.util.concurrent.CopyOnWriteArraySet;
 public class ConnectionDataTracker extends Handler {
     private static final String TAG = "ConnectionDataTracker";
 
-    private static final String EXTRA_FILE_PATH_NAME = "filePathName";
+    private static final String EXTRA_FILE_PATH_NAME = "tempFilePathName";
 
     private static final int EVENT_SEND_NETEVENT = 0;
     private static final int EVENT_NETEVENT_RECEIVED = 1;
@@ -204,7 +204,7 @@ public class ConnectionDataTracker extends Handler {
         byte[] bytes = netEvent.toBytes();
         String strFilePathName = "";
        if (request.event instanceof FileEvent) {
-            strFilePathName = ((FileEvent) request.event).filePathName;
+            strFilePathName = ((FileEvent) request.event).tempFilePathName;
         }
 
         Log.d(TAG, "handleEventSendRequest, request:" + request.toString());
@@ -260,7 +260,7 @@ public class ConnectionDataTracker extends Handler {
 
         if (event instanceof FileEvent) {
             renameTempFile((FileEvent)event, strFilePathName);
-            //((FileEvent)event).filePathName = strFilePathName;
+            //((FileEvent)event).tempFilePathName = strFilePathName;
         }
 
         verifyEvent(connId, netEvent.eventType, netEvent.eventId);
@@ -286,7 +286,7 @@ public class ConnectionDataTracker extends Handler {
             file.renameTo(newFile);
         }
 
-        event.filePathName = newFileName;
+        event.tempFilePathName = newFileName;
     }
 
     private void verifyEvent(int connId, int eventType, long eventId) {

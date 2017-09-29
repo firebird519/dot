@@ -35,9 +35,6 @@ import com.assistant.utils.FileOpenIntentUtils;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
 import java.util.List;
 
@@ -220,7 +217,7 @@ public class ChatFragment extends Fragment {
                 mChattingAdapter.openFile(position);
                 break;
             case MENU_SAVE_AS_ID:
-                mChattingAdapter.saveFileAs(position);
+                handleFileSaveAsAction(position);
                 break;
             case MENU_SEND_ID:
                 break;
@@ -234,13 +231,13 @@ public class ChatFragment extends Fragment {
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         Log.d(this, "onActivityResult, requestCode:" + requestCode
-                + ", resultcode:" + resultCode);
+                + ", resultCode:" + resultCode);
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
                 String filePathName = data.getStringExtra(FileChooserActivity.EXTRA_FILE_PATH_NAME);
                 mSelectedFilePathName = filePathName;
 
-                Log.d(this, "onActivityResult, filePathName:" + filePathName);
+                Log.d(this, "onActivityResult, tempFilePathName:" + filePathName);
 
                 if (!TextUtils.isEmpty(filePathName)) {
                     mMsgEditText.setText(mContext.getString(R.string.file) + mSelectedFilePathName);
@@ -253,7 +250,7 @@ public class ChatFragment extends Fragment {
                 String filePathName =
                         data.getStringExtra(FileChooserActivity.EXTRA_FILE_PATH_NAME);
 
-                handleFileSaveAs(mSaveAsFileEvent, filePathName);
+                fileSaveAs(mSaveAsFileEvent, filePathName);
             }
 
             mSaveAsFileEvent = null;
@@ -314,51 +311,24 @@ public class ChatFragment extends Fragment {
         }
     }
 
-    private void handleFileSaveAs(FileEvent event, String destPath) {
+    public void handleFileSaveAsAction(int position) {
+        Event event = mChattingAdapter.getItem(position);
+
+        if (event instanceof FileEvent) {
+            mSaveAsFileEvent = (FileEvent) event;
+            FileChooserActivity.showChooseFileActivity(ChatFragment.this,
+                    mContext,
+                    FileChooserActivity.CHOOSE_TYPE_FOLDER,
+                    FOLDER_CHOOSER_REQUEST_CODE);
+        }
+    }
+
+    private void fileSaveAs(FileEvent event, String destPath) {
         if (event != null) {
-            if (!destPath.endsWith("/")) {
-                destPath += "/";
-            }
+            boolean ret = Utils.fileSaveAs(destPath, event.fileName, event.tempFilePathName);
 
-            File destFile = new File(destPath);
-            if (!(destFile.exists() && destFile.isDirectory())) {
-                Log.d(this, "handleFileSaveAs, dest path invalid:" + destPath);
-                return;
-            }
-
-            destFile = new File(destPath + event.fileName);
-
-            if (destFile.exists()) {
-                for (int i = 0; ; i++) {
-                    destFile = new File(destPath
-                            + i + "_" + event.fileName);
-
-                    if (!destFile.exists()) {
-                        break;
-                    }
-                }
-            }
-
-            File sourceFile = new File(event.filePathName);
-            if (sourceFile.exists()) {
-                try {
-                    destFile.createNewFile();
-
-                    FileInputStream input = new FileInputStream(sourceFile);
-                    FileOutputStream output = new FileOutputStream(destFile);
-                    byte[] b = new byte[1024 * 5];
-                    int len;
-                    while ((len = input.read(b)) != -1) {
-                        output.write(b, 0, len);
-                    }
-                    output.flush();
-                    output.close();
-                    input.close();
-
-                    Toast.makeText(mContext, R.string.file_saved_success, Toast.LENGTH_SHORT).show();
-                } catch (Exception e) {
-                    destFile.delete();
-                }
+            if (ret) {
+                Toast.makeText(mContext, R.string.file_saved_success, Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -484,7 +454,7 @@ public class ChatFragment extends Fragment {
             Event event = getItem(position);
 
             if (event instanceof FileEvent) {
-                String filePathName = ((FileEvent)event).filePathName;
+                String filePathName = ((FileEvent)event).tempFilePathName;
                 Intent intent = FileOpenIntentUtils.getOpenFileActvityIntent(filePathName);
 
                 Log.d(this, "openFile:" + filePathName);
@@ -493,18 +463,6 @@ public class ChatFragment extends Fragment {
                 } else {
                     Toast.makeText(mContext, R.string.file_not_existed, Toast.LENGTH_SHORT).show();
                 }
-            }
-        }
-
-        public void saveFileAs(int position) {
-            Event event = getItem(position);
-
-            if (event instanceof FileEvent) {
-                mSaveAsFileEvent = (FileEvent) event;
-                FileChooserActivity.showChooseFileActivity(ChatFragment.this,
-                        mContext,
-                        FileChooserActivity.CHOOSE_TYPE_FOLDER,
-                        FOLDER_CHOOSER_REQUEST_CODE);
             }
         }
     }

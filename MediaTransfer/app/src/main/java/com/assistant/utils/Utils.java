@@ -7,14 +7,20 @@ import android.os.BatteryManager;
 import android.os.PowerManager;
 import android.os.storage.StorageManager;
 import android.text.TextUtils;
+import android.widget.Toast;
 
 import com.assistant.MediaTransferApplication;
+import com.assistant.R;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Utils {
+    private static final String TAG = "Utils";
+
     //TODO: change to false for official release.
     public static final boolean DEBUG = true;
     public static final boolean DEBUG_CONNECTION = true;
@@ -116,6 +122,58 @@ public class Utils {
         return pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 name);
+    }
+
+    public static boolean fileSaveAs(String destPath,
+                                     String destFileName, String souceFilePathName) {
+        boolean success = false;
+
+        if (!destPath.endsWith("/")) {
+            destPath += "/";
+        }
+
+        File destFile = new File(destPath);
+        if (!(destFile.exists() && destFile.isDirectory())) {
+            Log.d(TAG , "fileSaveAs, dest path invalid:" + destPath);
+            return success;
+        }
+
+        destFile = new File(destPath + destFileName);
+
+        if (destFile.exists()) {
+            for (int i = 0; ; i++) {
+                destFile = new File(destPath
+                        + i + "_" + destFileName);
+
+                if (!destFile.exists()) {
+                    break;
+                }
+            }
+        }
+
+        File sourceFile = new File(souceFilePathName);
+        if (sourceFile.exists()) {
+            try {
+                destFile.createNewFile();
+
+                FileInputStream input = new FileInputStream(sourceFile);
+                FileOutputStream output = new FileOutputStream(destFile);
+                byte[] b = new byte[1024 * 5];
+                int len;
+                while ((len = input.read(b)) != -1) {
+                    output.write(b, 0, len);
+                }
+                output.flush();
+                output.close();
+                input.close();
+
+                success = true;
+            } catch (Exception e) {
+                destFile.delete();
+            }
+        }
+
+        return success;
     }
 
 }
