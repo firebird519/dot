@@ -19,6 +19,8 @@ import com.assistant.events.EventFactory;
 import com.assistant.events.FileEvent;
 import com.assistant.utils.Log;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -410,6 +412,50 @@ public class ClientManager {
     protected void notifyMessageSendResult(int connId, int msgId, boolean isSuccess) {
         for (ClientManagerListener listener : mListeners) {
             listener.onMessageSendResult(connId, msgId, isSuccess);
+        }
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        try {
+            writer.println("ClientManager:");
+
+            writer.println("  mListeners size:" + mListeners.size());
+
+            // dump connection id list:
+            String idList = "";
+            for(int id : mConnectionIds) {
+                idList += id + " ";
+            }
+
+            writer.println("  Connection Ids:" + idList);
+
+            writer.println("  Connection Msgs:");
+            // dump connection messages mMsgCollections
+            for (int connId : mMsgCollections.keySet()) {
+                List<Event> events = (List<Event>)mMsgCollections.get(connId);
+
+                if (events != null) {
+                    for(Event event : events) {
+                        writer.println("    connId[" + connId + "], Event:" + event.toString());
+                    }
+
+                    writer.println("    ");
+                }
+
+            }
+            writer.flush();
+
+            // mMediaTransferManager
+            mMediaTransferManager.dump(fd, writer, args);
+
+            writer.println("");
+
+            // mConnectionManager
+            mConnectionManager.dump(fd, writer, args);
+
+            writer.flush();
+        } catch (Exception e) {
+            Log.d(this, "Exception happened when dump:" + e.getMessage());
         }
     }
 }

@@ -9,11 +9,10 @@ import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.events.ClientInfo;
 import com.assistant.utils.Log;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.UUID;
 
-/**
- * Created by liyong on 17-9-20.
- */
 
 public class MediaTransferManager {
     private static MediaTransferManager sInstance;
@@ -102,4 +101,15 @@ public class MediaTransferManager {
         mClientInfo = new ClientInfo(name, uniqueId);
     }
 
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        try {
+            writer.println("  MediaTransferManager:");
+
+            writer.println("    ClientInfo:" + mClientInfo.toString());
+            writer.println("    port:" + mPort);
+            writer.flush();
+        } catch (Exception e) {
+            Log.d(this, "Exception happened when dump:" + e.getMessage());
+        }
+    }
 }

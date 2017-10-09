@@ -13,6 +13,8 @@ import com.assistant.events.Event;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -81,7 +83,7 @@ public class ConnectionManager {
     private List<HostConnection> mHostConnList =
             Collections.synchronizedList(new ArrayList<HostConnection>());
 
-    private static int sConnIdBase = -1;
+    private static Integer sConnIdBase = -1;
 
     private int mPort;
 
@@ -206,17 +208,22 @@ public class ConnectionManager {
                 }
 
                 connection.setId(id);
+                connection.addListner(new ConnectionListenerImpl());
 
+                long curTime = SystemClock.currentThreadTimeMillis();
                 connection.setWakeLock(Utils.createBackGroundWakeLock(mContext,
                                 String.valueOf(connection.getId()) + ":send"),
                         Utils.createBackGroundWakeLock(mContext,
                                 String.valueOf(connection.getId()) + ":receive"));
 
+                Log.d(TAG, "handleConnectionAdded, wakelock created time:" +
+                        (SystemClock.currentThreadTimeMillis() - curTime));
+
                 mConnections.put(connection.getId(), connection);
                 mDataTracker.onConnectionAdded(connection);
                 connection.startHeartBeat();
 
-                connection.addListner(new ConnectionListenerImpl());
+
 
                 mThreadHandler
                         .obtainMessage(EVENT_NOTIFY_CONNECTION_ADDED, connection.getId(),
@@ -332,8 +339,24 @@ public class ConnectionManager {
     }
 
     private Integer generateConnectionId() {
-        synchronized (mConnections) {
-            sConnIdBase += 1;
+        synchronized (sConnIdBase) {
+            // there is no need to adjust connectionId when it is small enough.
+            if (sConnIdBase > 10000) {
+                int newIdBase = -1;
+                for (Connection connection : mConnections.values()) {
+                    if (connection.getId() > newIdBase) {
+                        newIdBase = connection.getId();
+                    }
+                }
+
+                if (sConnIdBase > newIdBase
+                        && !mConnectionCreationHandler.hasActiveRequest()) {
+                    Log.d(TAG, "generateConnectionId, adjust conn id base to:" + newIdBase);
+                    sConnIdBase = newIdBase;
+                }
+            }
+
+            sConnIdBase = sConnIdBase + 1;
         }
 
         Log.d(TAG, "generateConnectionId:" + sConnIdBase);
@@ -578,5 +601,52 @@ public class ConnectionManager {
         }
 
         Log.d(TAG, builder.toString());
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        try {
+            writer.println("  ConnectionManager:");
+            writer.println("    mListeners size:" + mListeners.size());
+            writer.println("    sConnIdBase:" + sConnIdBase);
+            writer.println("    mPort:" + mPort);
+            writer.println("    mStopped:" + mStopped);
+            writer.println("    isReconnectAllowed:" + mReconnectFlag);
+
+            writer.println("    isHostSearching:" + isHostSearching());
+            writer.println("    mSearchListeners size:" + mSearchListeners.size());
+            writer.println("");
+            HostSearchHandler.getInstance(mContext).dump(fd, writer, args);
+            writer.println("");
+
+            // mConnections
+            writer.println("    Connections(" + mConnections.size() + "):");
+            if (mConnections.size() > 0) {
+                for (Connection connection : mConnections.values()) {
+                    connection.dump(fd, writer, args);
+                }
+            } else {
+                writer.println("      no connections!");
+            }
+            writer.println("");
+
+            // mHostConnList
+            writer.println("    HostConnections(" + mHostConnList.size() + "):");
+            if (mHostConnList.size() > 0) {
+                for (HostConnection hostConnection : mHostConnList) {
+                    hostConnection.dump(fd, writer, args);
+                }
+            } else {
+                writer.println("      no HostConnections!");
+            }
+            writer.println("");
+
+            mDataTracker.dump(fd, writer, args);
+            writer.println("");
+
+            mConnectionCreationHandler.dump(fd, writer, args);
+            writer.println("");
+        } catch (Exception e) {
+            Log.d(this, "Exception happened when dump:" + e.getMessage());
+        }
     }
 }

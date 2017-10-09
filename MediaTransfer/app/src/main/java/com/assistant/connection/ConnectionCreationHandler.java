@@ -8,6 +8,8 @@ import android.text.TextUtils;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -51,6 +53,10 @@ public class ConnectionCreationHandler extends Handler {
 
     public void processConnectCreationRequest(ConnectionCreationRequest request) {
         processConnectCreationRequest(request, 0L);
+    }
+
+    public boolean hasActiveRequest() {
+        return mRequestList.size() > 0;
     }
 
     public void processConnectCreationRequest(ConnectionCreationRequest request, long delayed) {
@@ -268,6 +274,28 @@ public class ConnectionCreationHandler extends Handler {
 
                 onResponse(mRequest, null, Connection.CONNECTION_REASON_CODE_UNKNOWN);
             }
+        }
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        try {
+            writer.println("  ConnectionCreationHandler, request size:" + mRequestList.size());
+
+            synchronized (mRequestList) {
+                if (mRequestList.size() > 0) {
+                    for (ConnectionCreationRequest request : mRequestList) {
+                        writer.println("    "  + request.toString());
+                    }
+                } else {
+                    writer.println("    no connection creation request!");
+                }
+            }
+
+            writer.println("    mStopped:" + mStopped);
+
+            writer.flush();
+        } catch (Exception e) {
+            Log.d(this, "Exception happened when dump:" + e.getMessage());
         }
     }
 }

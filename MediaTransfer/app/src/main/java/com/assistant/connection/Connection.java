@@ -12,8 +12,10 @@ import com.assistant.utils.Log;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -789,6 +791,27 @@ public class Connection {
     private void notifyClosed(int reason) {
         for (ConnectionListener listener : mListeners) {
             listener.onClosed(this, reason);
+        }
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        try {
+            writer.println("  Connection:");
+            writer.println("    Id:" + getId());
+            writer.println("    IpAddress:" + getIp());
+            writer.println("    Port:" + getPort());
+            writer.println("    mState:" + mState);
+            writer.println("    Host:" + mIsHost);
+            writer.println("    mConnData:" + getConnData());
+            writer.println("    mLastReasonCode:" + mLastReasonCode);
+            writer.println("    mToBeClosedReason:" + mToBeClosedReason);
+            writer.println("    mIsDataSending:" + mIsDataSending);
+            writer.println("    mIsDataReceiving:" + mIsDataReceiving);
+            writer.println("");
+
+            writer.flush();
+        } catch (Exception e) {
+            Log.d(this, "Exception happened when dump:" + e.getMessage());
         }
     }
 }

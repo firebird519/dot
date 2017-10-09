@@ -6,7 +6,9 @@ import android.os.PowerManager;
 
 import com.assistant.utils.Log;
 
+import java.io.FileDescriptor;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Set;
@@ -157,6 +159,19 @@ public class HostConnection {
     private void notifySocketClosed(int errorCode) {
         for(HostConnectionListener listener : mListeners) {
             listener.onHostClosed(this, errorCode);
+        }
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        try {
+            writer.println("  HostConnection:");
+            writer.println("    Port:" + mPort);
+            writer.println("    closed:" + isClosed());
+            writer.println("");
+
+            writer.flush();
+        } catch (Exception e) {
+            Log.d(this, "Exception happened when dump:" + e.getMessage());
         }
     }
 }

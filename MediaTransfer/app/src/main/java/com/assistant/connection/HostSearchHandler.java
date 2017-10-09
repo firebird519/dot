@@ -8,6 +8,8 @@ import com.assistant.utils.ThreadPool;
 import com.assistant.utils.IPv4Utils;
 import com.assistant.utils.Utils;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,20 +19,22 @@ import java.util.List;
  * Handler server search.
  */
 public class HostSearchHandler {
-    public static final int SERVER_SEARCH_FAILED_WIFI_NOT_CONNECTED = 1;
+    private static final String TAG = "HostSearchHandler";
+
     public static final int SERVER_SEARCH_CANCELED = 2;
 
-    public static final int IP_MARK_CONNECT_FAILED = -1;
+    public static final int IP_MARK_CONNECT_FAILED = 9;
     public static final int IP_MARK_IDLE = 0;
     public static final int IP_MARK_CONNECTED = 1;
     public static final int IP_MARK_CONNECTING = 2;
-    private static final String TAG = "HostSearchHandler";
+
     private static final int poolSize = 10;
     private static HostSearchHandler sInstance;
 
-    int mPort;
+    private String mIpSegment;
+    private int mPort;
 
-    int[] mSearchIpMask = new int[256];
+    private int[] mSearchIpMask = new int[256];
     private Context mContext;
     private ThreadPool mThreadPool;
     private boolean mIsSearching;
@@ -80,6 +84,7 @@ public class HostSearchHandler {
             return;
         }
 
+        mIpSegment = ipSegment;
         mPort = port;
 
         mIsSearching = true;
@@ -331,5 +336,35 @@ public class HostSearchHandler {
     public interface ServerSearchListener {
         void onSearchCompleted();
         void onSearchCanceled(int reason);
+    }
+
+
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        try {
+            writer.println("  HostSearchHandler:");
+
+            writer.println("    mIpSegment:" + mIpSegment);
+            writer.println("    mPort:" + mPort);
+            writer.println("    mIsSearching:" + mIsSearching);
+            writer.println("    mListeners size:" + mListeners.size());
+
+            writer.println("    Ip mark:");
+            String maskArray = "";
+            int index = 0;
+            for (int mask : mSearchIpMask) {
+                maskArray += mask + " ";
+                index++;
+
+                if (index != 1 && index%32 == 0) {
+                    maskArray += "\n";
+                }
+            }
+
+            writer.println(maskArray);
+
+            writer.flush();
+        } catch (Exception e) {
+            Log.d(this, "Exception happened when dump:" + e.getMessage());
+        }
     }
 }

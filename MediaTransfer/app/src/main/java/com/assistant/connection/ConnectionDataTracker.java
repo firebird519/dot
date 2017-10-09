@@ -20,10 +20,12 @@ import com.assistant.utils.ThreadPool;
 import com.assistant.utils.Utils;
 
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -429,70 +431,75 @@ public class ConnectionDataTracker extends Handler {
                  Log.d(TAG, "EventSendRunnable, sending request:" + mRequest.toString());
 
                 conn.acquireSendWakeLock();
-                if (TextUtils.isEmpty(filePathName)) {
-                    byte[] header = generateDataHeader(bytesLen, 0);
+                try {
+                    if (TextUtils.isEmpty(filePathName)) {
+                        byte[] header = generateDataHeader(bytesLen, 0);
 
-                    Log.d(TAG, "EventSendRunnable, header len:" + header.length);
-
-                    ret = conn.send(header, ConnectionManager.DATA_HEADER_LEN_v1);
-
-                    if (ret == ConnectionManager.DATA_HEADER_LEN_v1) {
-                        Log.d(TAG, "EventSendRunnable, send json:" + bytesLen);
-                        ret = conn.send(bytes, bytesLen);
-
-                        if (ret == bytesLen) {
-                            success = true;
-                            mRequest.responseProgress(100);
-                        }
-                    }
-
-                    Log.d(TAG, "EventSendRunnable, send ret:" + ret);
-
-                } else {
-                    Log.d(TAG, "EventSendRunnable, send file:" + filePathName);
-                    FileInputStream fileInputStream;
-                    try {
-                        fileInputStream = new FileInputStream(filePathName);
-                        int fileLen = fileInputStream.available();
-
-                        byte[] header = generateDataHeader(bytesLen, fileLen);
+                        Log.d(TAG, "EventSendRunnable, header len:" + header.length);
 
                         ret = conn.send(header, ConnectionManager.DATA_HEADER_LEN_v1);
+
                         if (ret == ConnectionManager.DATA_HEADER_LEN_v1) {
+                            Log.d(TAG, "EventSendRunnable, send json:" + bytesLen);
                             ret = conn.send(bytes, bytesLen);
 
-                            if (ret == bytesLen && fileLen > 0) {
-                                ret = conn.sendFile(filePathName);
-
-                                if (ret == fileLen) {
-                                    success = true;
-                                }
-                            } else if (ret == bytesLen) {
-                                mRequest.responseProgress(100);
+                            if (ret == bytesLen) {
                                 success = true;
-                            }
-                        } else {
-                            if (!conn.isClosed()) {
-                                Log.e(TAG, "file json send failed! close connection. reason:" + ret);
-                                conn.close(ret);
-                            } else {
-                                Log.e(TAG, "file json send failed! connection closed:" + ret);
+                                mRequest.responseProgress(100);
                             }
                         }
 
-                        fileInputStream.close();
-                    } catch (Exception e) {
-                        e.printStackTrace();
+                        Log.d(TAG, "EventSendRunnable, send ret:" + ret);
+
+                    } else {
+                        Log.d(TAG, "EventSendRunnable, send file:" + filePathName);
+                        FileInputStream fileInputStream;
+                        try {
+                            fileInputStream = new FileInputStream(filePathName);
+                            int fileLen = fileInputStream.available();
+
+                            byte[] header = generateDataHeader(bytesLen, fileLen);
+
+                            ret = conn.send(header, ConnectionManager.DATA_HEADER_LEN_v1);
+                            if (ret == ConnectionManager.DATA_HEADER_LEN_v1) {
+                                ret = conn.send(bytes, bytesLen);
+
+                                if (ret == bytesLen && fileLen > 0) {
+                                    ret = conn.sendFile(filePathName);
+
+                                    if (ret == fileLen) {
+                                        success = true;
+                                    }
+                                } else if (ret == bytesLen) {
+                                    mRequest.responseProgress(100);
+                                    success = true;
+                                }
+                            } else {
+                                if (!conn.isClosed()) {
+                                    Log.e(TAG, "file json send failed! close connection. reason:" + ret);
+                                    conn.close(ret);
+                                } else {
+                                    Log.e(TAG, "file json send failed! connection closed:" + ret);
+                                }
+                            }
+
+                            fileInputStream.close();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     }
+
+                    responseSendResult(success, ret, ret);
+                    processNextRequest(connId);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    conn.releaseSendWakeLock();
                 }
-
-                responseSendResult(success, ret, ret);
-
-                conn.releaseSendWakeLock();
-                processNextRequest(connId);
             } else {
                 responseSendResult(false, EventSendResponse.FAILED_CONNECTION_CLOSED, 0);
             }
+
             Log.d(TAG, "EventSendRunnable, ended for connId:" + connId);
         }
 
@@ -845,6 +852,50 @@ public class ConnectionDataTracker extends Handler {
             if (mConnection != null) {
                 mConnection.close(Connection.CONNECTION_REASON_CODE_IO_EXCEPTION);
             }
+        }
+    }
+
+    public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        try {
+            writer.println("  ConnectionDataTracker:");
+            writer.println("    mListeners size:" + mListeners.size());
+            writer.println("    mTempFileDir:" + mTempFileDir);
+
+            writer.println("    mToBeVerifiedRequests:");
+            if (mToBeVerifiedRequests.size() > 0) {
+                for (EventSendRequest request : mToBeVerifiedRequests) {
+                    writer.println("      EventSendRequest:" + request.toString());
+                }
+            } else {
+                writer.println("      No to be verified requests!");
+            }
+            writer.println("");
+
+
+            writer.println("    mConnectionSendQueues:");
+
+            if (mConnectionSendQueues.size() > 0) {
+                for (int connId : mConnectionSendQueues.keySet()) {
+                    writer.println("      connId:" + connId);
+
+                    List<EventSendRequest> requests = mConnectionSendQueues.get(connId);
+
+                    if (requests != null && requests.size() > 0) {
+                        for(EventSendRequest request : requests) {
+                            writer.println("        EventSendRequest:" + request.toString());
+                        }
+                    } else {
+                        writer.println("        no queued requests!");
+                    }
+                }
+            } else {
+                writer.println("      No request list for connections!");
+            }
+            writer.println("");
+
+            writer.flush();
+        } catch (Exception e) {
+            Log.d(this, "Exception happened when dump:" + e.getMessage());
         }
     }
 }

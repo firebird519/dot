@@ -4,6 +4,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Binder;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
@@ -14,6 +15,9 @@ import com.assistant.mediatransfer.ClientManager;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.MainActivity;
 import com.assistant.utils.Log;
+
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
 
 public class MediaTransferService extends Service {
 
@@ -136,5 +140,26 @@ public class MediaTransferService extends Service {
             Intent intent = new Intent("com.assistant.mediatransfer.startreceiver");
             sendBroadcast(intent);
         }
+    }
+
+    @Override
+    protected void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
+        final long token = Binder.clearCallingIdentity();
+        try {
+            writer.println("MediaTransferService:");
+            writer.flush();
+
+            if (mClientManager != null) {
+                mClientManager.dump(fd, writer, args);
+            } else {
+                writer.println("  ClientManager is not created!");
+            }
+
+            writer.flush();
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
+
+        //super.dump(fd, writer, args);
     }
 }
