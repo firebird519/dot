@@ -23,7 +23,7 @@ public class Utils {
 
     //TODO: change to false for official release.
     public static final boolean DEBUG = true;
-    public static final boolean DEBUG_CONNECTION = true;
+    public static final boolean DEBUG_CONNECTION = false;
 
     public static final String DCIM = "DCIM";
 

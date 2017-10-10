@@ -37,6 +37,7 @@ public class ClientsSearchHandler {
 
     private Context mContext;
     private String mSelfWifiIp;
+    private boolean mCanceled = false;
 
     private ThreadPool mThreadPool;
 
@@ -74,9 +75,8 @@ public class ClientsSearchHandler {
      * search XXX.XXX.XXX.* ip addresses which idAddress in.
      */
     public synchronized void searchClientInSegment(String ipSegment) {
-        byte[] byteIp = IPv4Utils.ipToBytesByReg(ipSegment);
-
-        if (byteIp == null || byteIp.length != 4) {
+        mCanceled = false;
+        if (!Utils.isIpPattern(ipSegment)) {
             Log.d(this, "searchClientInSegment: ip is not valid:" + ipSegment);
             return;
         }
@@ -118,10 +118,15 @@ public class ClientsSearchHandler {
     }
 
     public void stopSearch(int reason) {
+        mCanceled = true;
         onSearchCanceled(reason);
     }
 
     public boolean isClientSearching() {
+        if (mCanceled) {
+            return false;
+        }
+
         if (mScannerList.size() > 0) {
             for(IpSegmentScanner scanner : mScannerList) {
                 if (scanner.isSearching()) {
@@ -215,6 +220,7 @@ public class ClientsSearchHandler {
 
             writer.println("    self ip:" + mSelfWifiIp);
             writer.println("    mListeners size:" + mListeners.size());
+            writer.println("    canceled:" + mCanceled);
             String ignoredIp = "";
             if (mIgnoredIpList.size() > 0) {
                 for (String ip : mIgnoredIpList) {
@@ -239,7 +245,6 @@ public class ClientsSearchHandler {
             Log.d(this, "Exception happened when dump:" + e.getMessage());
         }
     }
-
 
     private class IpSegmentScanner {
         private String mIpSegment;
@@ -464,25 +469,33 @@ public class ClientsSearchHandler {
 
         private synchronized void handleConnectionCreationResult(Connection connection,
                                                                  boolean success) {
-            if (success && mIsSearching) {
-                setIpMask(connection.getIp(), IP_MARK_CONNECTED);
-
+            if (success) {
                 ConnectionManager.getInstance(mContext).addConnection(connection);
                 // add connection
             } else {
                 Log.d(TAG, "handleConnectionCreationResult,  search failed or canceled for ip:"
                         + connection.getIp());
-                setIpMask(connection.getIp(), IP_MARK_CONNECT_FAILED);
                 connection.close();
+            }
+            onConnectCompleted(connection.getIp(), success);
+        }
+
+        private synchronized void onConnectCompleted(String ipAddress, boolean success) {
+            Log.d(TAG, "onConnectCompleted,  ip:" + ipAddress + ", result:" + success);
+
+            if (success && !mCanceled) {
+                setIpMask(ipAddress, IP_MARK_CONNECTED);
+                // add connection
+            } else {
+                setIpMask(ipAddress, IP_MARK_CONNECT_FAILED);
             }
 
             // search end. notify failed and do necessary clean
             if (!hasSearchingMask()) {
-                Log.d(TAG, "handleConnectionCreationResult,  search ended!");
+                Log.d(TAG, "onConnectCompleted,  search ended!");
                 onScanCompleted();
             }
         }
-
 
         class ConnectionCreateTask implements Runnable {
             private String ip;
@@ -496,12 +509,17 @@ public class ClientsSearchHandler {
             @Override
             public void run() {
                 Log.d(TAG, "ConnectionCreateTask, ip:" + ip + ", mIsSearching:" + mIsSearching);
-                if (!mIsSearching) {
+                if (mCanceled) {
                     Log.d(TAG, "ConnectionCreateTask, canceled for ip:" + ip);
                     return;
                 }
 
-                ConnectionFactory.createConnection(ip, port, mConnectionListener);
+                try {
+                    ConnectionFactory.createConnection(ip, port, mConnectionListener);
+                } catch (Exception e) {
+                    Log.e(TAG, "ConnectionCreateTask exception happened for ip:" + ip);
+                    onConnectCompleted(ip, false);
+                }
                 Log.d(TAG, "ConnectionCreateTask, ip:" + ip + ", createConnection completed!");
             }
         }
