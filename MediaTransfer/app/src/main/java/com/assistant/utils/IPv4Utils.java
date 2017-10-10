@@ -8,6 +8,7 @@ import java.net.InetAddress;
  *         mail: sjsky007@gmail.com
  */
 public class IPv4Utils {
+    private final static String TAG = "IPv4Utils";
 
     private final static int INADDRSZ = 4;
 
@@ -21,8 +22,10 @@ public class IPv4Utils {
         try {
             return InetAddress.getByName(ipAddr).getAddress();
         } catch (Exception e) {
-            throw new IllegalArgumentException(ipAddr + " is invalid IP");
+            Log.d(TAG, "ipToBytesByInet, ip parser error:" + ipAddr);
         }
+
+        return null;
     }
 
     /**
@@ -41,9 +44,10 @@ public class IPv4Utils {
             ret[3] = (byte) (Integer.parseInt(ipArr[3]) & 0xFF);
             return ret;
         } catch (Exception e) {
-            throw new IllegalArgumentException(ipAddr + " is invalid IP");
+            Log.d(TAG, "ipToBytesByInet, ip parser error:" + ipAddr);
         }
 
+        return null;
     }
 
     /**

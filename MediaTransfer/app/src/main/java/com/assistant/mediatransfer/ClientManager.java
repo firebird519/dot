@@ -366,7 +366,7 @@ public class ClientManager {
                 + ", listener:" + listener);
         if (!TextUtils.isEmpty(ip) && networkInfoManager.isWifiConnected()
                 && mMediaTransferManager.isNetworkSettingsOn()) {
-            mConnectionManager.searchHost(ip, mMediaTransferManager.getPort(), listener);
+            mConnectionManager.searchHost(ip, listener);
         } else {
             if (listener != null) {
                 listener.onSearchCompleted();

@@ -2,7 +2,7 @@
 2. file send/receive  -- done
 4. wakelock for socket data receiving  -- done
 5. online update
-6. add dump for managers... -- already add logs
+6. add dump for managers... -- done
 7. message and connection notification
 8. add sending queue  -- done
 9. add reconnect request cache to adjust if one ip is in reconnecting... -- done

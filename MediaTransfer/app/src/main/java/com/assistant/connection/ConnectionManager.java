@@ -10,6 +10,7 @@ import android.text.TextUtils;
 
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
+import com.assistant.ui.fragment.ClientListFragment;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
@@ -22,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import static com.assistant.connection.HostSearchHandler.SERVER_SEARCH_CANCELED;
+import static com.assistant.connection.ClientsSearchHandler.SERVER_SEARCH_CANCELED;
 
 /**
  *
@@ -90,6 +91,7 @@ public class ConnectionManager {
     private ConnMgrThreadHandler mThreadHandler;
     private ConnectionDataTracker mDataTracker;
     private ConnectionCreationHandler mConnectionCreationHandler;
+    private ClientsSearchHandler mClientsSearchHandler;
 
     private boolean mStopped = false;
 
@@ -149,6 +151,8 @@ public class ConnectionManager {
         HandlerThread thread = new HandlerThread("connectionManager");
         thread.start();
         mThreadHandler = new ConnMgrThreadHandler(thread.getLooper());
+
+        mClientsSearchHandler = ClientsSearchHandler.getInstance(context);
 
         // use same looper with connection manager due to no long time cpu hosting work.
         mConnectionCreationHandler = new ConnectionCreationHandler(thread.getLooper(),
@@ -368,7 +372,7 @@ public class ConnectionManager {
         Log.d(TAG, "disconnectAllConnections");
         mStopped = true;
 
-        HostSearchHandler.getInstance(mContext).stopSearch(SERVER_SEARCH_CANCELED);
+        mClientsSearchHandler.stopSearch(SERVER_SEARCH_CANCELED);
         mConnectionCreationHandler.cancelAllRequests();
 
         synchronized (mHostConnList) {
@@ -529,11 +533,11 @@ public class ConnectionManager {
     private List<SearchListener> mSearchListeners =
             new CopyOnWriteArrayList<SearchListener>();
 
-    public boolean isHostSearching() {
-        return HostSearchHandler.getInstance(mContext).isSearching();
+    public boolean isClientSearching() {
+        return mClientsSearchHandler.isClientSearching();
     }
 
-    public void searchHost(String ipSegment, int port, final SearchListener listener) {
+    public void searchHost(String ipSegment, final SearchListener listener) {
         mStopped = false;
 
         if (listener != null) {
@@ -542,26 +546,31 @@ public class ConnectionManager {
             }
         }
 
-        if (isHostSearching()) {
+        if (isClientSearching()) {
             Log.d(TAG, "searchHost, ipSegment:" + ipSegment + ", is in searching state!");
             return;
         }
 
         logConnectionList();
 
-        HostSearchHandler.getInstance(mContext).searchServer(ipSegment, port, new HostSearchHandler.ServerSearchListener() {
+        mClientsSearchHandler.addListener(
+                new ClientsSearchHandler.ServerSearchListener() {
             @Override
             public void onSearchCompleted() {
                 Log.d(TAG, "searchHost, onSearchCompleted");
+                mClientsSearchHandler.removeListener(this);
                 notifySearchCompleted();
             }
 
             @Override
             public void onSearchCanceled(int reason) {
                 Log.d(TAG, "searchHost, onSearchCanceled reason:" + reason);
+                mClientsSearchHandler.removeListener(this);
                 notifySearchCanceled(reason);
             }
         });
+
+        mClientsSearchHandler.searchClientInSegment(ipSegment);
     }
 
     private void notifySearchCompleted() {
@@ -612,10 +621,10 @@ public class ConnectionManager {
             writer.println("    mStopped:" + mStopped);
             writer.println("    isReconnectAllowed:" + mReconnectFlag);
 
-            writer.println("    isHostSearching:" + isHostSearching());
+            writer.println("    isClientSearching:" + isClientSearching());
             writer.println("    mSearchListeners size:" + mSearchListeners.size());
             writer.println("");
-            HostSearchHandler.getInstance(mContext).dump(fd, writer, args);
+            mClientsSearchHandler.dump(fd, writer, args);
             writer.println("");
 
             // mConnections

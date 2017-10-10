@@ -8,7 +8,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
 
-import com.assistant.connection.HostSearchHandler;
+import com.assistant.connection.ClientsSearchHandler;
 import com.assistant.mediatransfer.ClientManager;
 import com.assistant.ui.permissiongrant.PermissionHelper;
 import com.assistant.utils.Log;
@@ -127,8 +127,8 @@ public class MediaTransferApplication extends Application {
 
         mAppQuit = true;
 
-        HostSearchHandler.getInstance(getApplicationContext())
-                .stopSearch(HostSearchHandler.SERVER_SEARCH_CANCELED);
+        ClientsSearchHandler.getInstance(getApplicationContext())
+                .stopSearch(ClientsSearchHandler.SERVER_SEARCH_CANCELED);
 
         if (stopService) {
             MediaTransferService.startServiceForQuit(getApplicationContext());
