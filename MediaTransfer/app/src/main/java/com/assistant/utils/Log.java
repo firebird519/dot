@@ -17,7 +17,7 @@ import java.util.Locale;
 public class Log {
     private static String TAG = "Log";
 
-    public static final boolean LOG_TO_FILE_FLAG = Utils.DEBUG_CONNECTION;
+    public static final boolean LOG_TO_FILE_FLAG = Utils.DEBUG_CONNECT_SELF;
 
     private static final String DEBUG = "D";
     private static final String ERROR = "E";
@@ -65,8 +65,12 @@ public class Log {
 
     public static void d(Object object, String msg) {
         if (Utils.DEBUG) {
-            android.util.Log.d(object.getClass().getSimpleName(), msg);
-            writeToFile(DEBUG, object.getClass().getSimpleName(), msg);
+            try {
+                android.util.Log.d(object.getClass().getSimpleName(), msg);
+                writeToFile(DEBUG, object.getClass().getSimpleName(), msg);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 

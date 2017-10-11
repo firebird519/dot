@@ -146,7 +146,7 @@ public class ConnectionCreationHandler extends Handler {
         Connection connection = mConnectionManager.getConnection(request.ipAddress);
 
         if (connection != null
-                && !(Utils.DEBUG_CONNECTION && mConnectionManager.getConnectionsSize() < 2)) {
+                && !(Utils.DEBUG_CONNECT_SELF && mConnectionManager.getConnectionsSize() < 2)) {
             onResponse(request, connection, 0);
             return;
         }

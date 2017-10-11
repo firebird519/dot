@@ -10,7 +10,6 @@ import android.text.TextUtils;
 
 import com.assistant.events.ClientInfo;
 import com.assistant.events.Event;
-import com.assistant.ui.fragment.ClientListFragment;
 import com.assistant.utils.Log;
 import com.assistant.utils.Utils;
 
@@ -22,8 +21,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-
-import static com.assistant.connection.ClientsSearchHandler.SERVER_SEARCH_CANCELED;
 
 /**
  *
@@ -181,7 +178,7 @@ public class ConnectionManager {
             if (connection != null && !mConnections.containsValue(connection)) {
                 String ipAddress = connection.getIp();
 
-                if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECTION && mConnections.size() <= 2)) {
+                if (isIpConnected(ipAddress) && !(Utils.DEBUG_CONNECT_SELF && mConnections.size() <= 2)) {
                     Log.d(this, "handleConnectionAdded: ipAddress already connected!");
                     connection.close(Connection.CONNECTION_REASON_CODE_CONNECT_ALREADY_CONNECTED);
                     return;
@@ -372,7 +369,7 @@ public class ConnectionManager {
         Log.d(TAG, "disconnectAllConnections");
         mStopped = true;
 
-        mClientsSearchHandler.stopSearch(SERVER_SEARCH_CANCELED);
+        mClientsSearchHandler.stopSearch();
         mConnectionCreationHandler.cancelAllRequests();
 
         synchronized (mHostConnList) {
@@ -527,7 +524,7 @@ public class ConnectionManager {
 
     public interface SearchListener{
         void onSearchCompleted();
-        void onSearchCanceled(int reason);
+        void onSearchCanceled();
     }
 
     private List<SearchListener> mSearchListeners =
@@ -538,6 +535,7 @@ public class ConnectionManager {
     }
 
     public void searchHost(String ipSegment, final SearchListener listener) {
+        Log.d(TAG, "searchHost, ipSegment:" + ipSegment);
         mStopped = false;
 
         if (listener != null) {
@@ -554,21 +552,24 @@ public class ConnectionManager {
         logConnectionList();
 
         mClientsSearchHandler.addListener(
-                new ClientsSearchHandler.ServerSearchListener() {
-            @Override
-            public void onSearchCompleted() {
-                Log.d(TAG, "searchHost, onSearchCompleted");
-                mClientsSearchHandler.removeListener(this);
-                notifySearchCompleted();
-            }
+                new ClientsSearchHandler.ClientSearchListener() {
+                    @Override
+                    public void onSearchStarted() {}
 
-            @Override
-            public void onSearchCanceled(int reason) {
-                Log.d(TAG, "searchHost, onSearchCanceled reason:" + reason);
-                mClientsSearchHandler.removeListener(this);
-                notifySearchCanceled(reason);
-            }
-        });
+                    @Override
+                    public void onSearchCompleted() {
+                        Log.d(TAG, "searchHost, onSearchCompleted");
+                        mClientsSearchHandler.removeListener(this);
+                        notifySearchCompleted();
+                    }
+
+                    @Override
+                    public void onSearchCanceled() {
+                        Log.d(TAG, "searchHost, onSearchCanceled.");
+                        mClientsSearchHandler.removeListener(this);
+                        notifySearchCanceled();
+                    }
+                });
 
         mClientsSearchHandler.searchClientInSegment(ipSegment);
     }
@@ -583,10 +584,10 @@ public class ConnectionManager {
         }
     }
 
-    private void notifySearchCanceled(int reason) {
+    private void notifySearchCanceled() {
         synchronized (mSearchListeners) {
             for (SearchListener listener : mSearchListeners) {
-                listener.onSearchCanceled(reason);
+                listener.onSearchCanceled();
             }
 
             mSearchListeners.clear();

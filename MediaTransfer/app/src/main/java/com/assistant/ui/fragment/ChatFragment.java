@@ -76,7 +76,7 @@ public class ChatFragment extends Fragment {
     private FileEvent mSaveAsFileEvent;
 
     //2 mins, and 10s for test mode
-    private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG_CONNECTION ? 10*1000 : 2*60*1000;
+    private static final long TIME_DISPLAY_TIMESTAMP = Utils.DEBUG_CONNECT_SELF ? 10*1000 : 2*60*1000;
 
     private static final int EVENT_LIST_UPDATE = 0;
     private static final int EVENT_SCREEN_UPDATE = 1;

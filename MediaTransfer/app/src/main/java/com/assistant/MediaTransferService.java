@@ -10,7 +10,6 @@ import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
 
-import com.assistant.datastorage.SharePreferencesHelper;
 import com.assistant.mediatransfer.ClientManager;
 import com.assistant.mediatransfer.MediaTransferManager;
 import com.assistant.ui.MainActivity;
@@ -20,7 +19,6 @@ import java.io.FileDescriptor;
 import java.io.PrintWriter;
 
 public class MediaTransferService extends Service {
-
     private static final String NETWORK_SEARCH_EXTRA = "network_search";
     private static final String QUIT_EXTRA = "quit_flags";
 
@@ -71,7 +69,8 @@ public class MediaTransferService extends Service {
 
         if (intent != null && intent.getExtras() != null) {
             for(String extra : intent.getExtras().keySet()) {
-                Log.d(this, "   tryStartListenAndSearch, extra:" + extra + ", value:" + intent.getExtras().get(extra));
+                Log.d(this, "   tryStartListenAndSearch, extra:" + extra
+                        + ", value:" + intent.getExtras().get(extra));
             }
         }
 
@@ -80,7 +79,6 @@ public class MediaTransferService extends Service {
                     ClientManager.getInstance(getApplicationContext());
 
             mClientManager.startListen();
-
             mClientManager.startSearchHost(null);
         }
     }

@@ -24,7 +24,9 @@ import java.util.List;
 public class ClientsSearchHandler {
     private static final String TAG = "ClientsSearchHandler";
 
-    public static final int SERVER_SEARCH_CANCELED = 2;
+    public static final int CLIENT_SEARCH_IDLE = 0;
+    public static final int CLIENT_SEARCHING = 1;
+    public static final int CLIENT_SEARCH_CANCELED = 2;
 
     public static final int IP_MARK_CONNECT_FAILED = 9;
     public static final int IP_MARK_IDLE = 0;
@@ -38,6 +40,8 @@ public class ClientsSearchHandler {
     private Context mContext;
     private String mSelfWifiIp;
     private boolean mCanceled = false;
+    private int mPreSearchState = CLIENT_SEARCH_IDLE;
+    private int mSearchingState = CLIENT_SEARCH_IDLE;
 
     private ThreadPool mThreadPool;
 
@@ -46,8 +50,8 @@ public class ClientsSearchHandler {
     private List<IpSegmentScanner> mScannerList =
             Collections.synchronizedList(new ArrayList<IpSegmentScanner>());
 
-    private List<ServerSearchListener> mListeners =
-            Collections.synchronizedList(new ArrayList<ServerSearchListener>());
+    private List<ClientSearchListener> mListeners =
+            Collections.synchronizedList(new ArrayList<ClientSearchListener>());
 
     private ClientsSearchHandler(Context context) {
         mContext = context;
@@ -61,13 +65,17 @@ public class ClientsSearchHandler {
         return sInstance;
     }
 
-    public void addListener(ServerSearchListener listener) {
+    public void addListener(ClientSearchListener listener) {
         if (!mListeners.contains(listener)) {
             mListeners.add(listener);
+
+            if (isClientSearching()) {
+                listener.onSearchStarted();
+            }
         }
     }
 
-    public void removeListener(ServerSearchListener listener) {
+    public void removeListener(ClientSearchListener listener) {
         mListeners.remove(listener);
     }
 
@@ -104,9 +112,12 @@ public class ClientsSearchHandler {
         } else {
             MediaTransferManager mediaTransferManager = MediaTransferManager.getInstance(mContext);
             scanner = new IpSegmentScanner(ipSegment, mediaTransferManager.getPort());
-            mScannerList.add(scanner);
 
             scanner.start();
+        }
+
+        if (isClientSearching()) {
+            setSearchingState(CLIENT_SEARCHING);
         }
     }
 
@@ -117,9 +128,11 @@ public class ClientsSearchHandler {
         }
     }
 
-    public void stopSearch(int reason) {
+    public void stopSearch() {
         mCanceled = true;
-        onSearchCanceled(reason);
+
+        mThreadPool.stop();
+        onSearchCanceled();
     }
 
     public boolean isClientSearching() {
@@ -153,7 +166,7 @@ public class ClientsSearchHandler {
     }
 
     private boolean isIpConnectAllowed(byte[] ip) {
-        if (ip == null || ip.length != 4) {
+        if (Utils.DEBUG_NO_SEARCH || ip == null || ip.length != 4) {
             return false;
         }
 
@@ -180,21 +193,79 @@ public class ClientsSearchHandler {
     private synchronized void onScannerCompleted(IpSegmentScanner scanner) {
         mScannerList.remove(scanner);
 
-        if (mScannerList.size() == 0) {
-            for(ServerSearchListener listener : mListeners) {
-                listener.onSearchCompleted();
-            }
+        if (!isClientSearching()) {
+            setSearchingState(CLIENT_SEARCH_IDLE);
 
             clean();
         }
     }
 
-    private synchronized void onSearchCanceled(int reason) {
-        for(ServerSearchListener listener : mListeners) {
-            listener.onSearchCanceled(reason);
+    private synchronized void onScannerStarted(IpSegmentScanner scanner) {
+        if (!mScannerList.contains(scanner)) {
+            mScannerList.add(scanner);
         }
 
+        setSearchingState(CLIENT_SEARCHING);
+    }
+
+    private synchronized void onSearchCanceled() {
+        setSearchingState(CLIENT_SEARCH_CANCELED);
+
         clean();
+    }
+
+    private void setSearchingState(int state) {
+        if (mSearchingState != state) {
+            switch (mSearchingState) {
+                case CLIENT_SEARCH_CANCELED:
+                case CLIENT_SEARCH_IDLE:
+                    if (state == CLIENT_SEARCHING) {
+                        mPreSearchState = mSearchingState;
+                        mSearchingState = state;
+                    }
+                    break;
+                case CLIENT_SEARCHING:
+                    mPreSearchState = mSearchingState;
+                    mSearchingState = state;
+                    break;
+                default:
+                    break;
+            }
+
+            if (mSearchingState == state) {
+                switch (mSearchingState) {
+                    case CLIENT_SEARCH_IDLE:
+                        notifySearchingCompleted();
+                        break;
+                    case CLIENT_SEARCHING:
+                        notifySearchingStarted();
+                        break;
+                    case CLIENT_SEARCH_CANCELED:
+                        notifySearchingCanceled();
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    private void notifySearchingStarted() {
+        for (ClientSearchListener listener : mListeners) {
+            listener.onSearchStarted();
+        }
+    }
+
+    private void notifySearchingCompleted() {
+        for(ClientSearchListener listener : mListeners) {
+            listener.onSearchCompleted();
+        }
+    }
+
+    private void notifySearchingCanceled() {
+        for(ClientSearchListener listener : mListeners) {
+            listener.onSearchCanceled();
+        }
     }
 
     private void clean() {
@@ -205,13 +276,12 @@ public class ClientsSearchHandler {
         mThreadPool = null;
 
         mScannerList.clear();
-
-        mListeners.clear();
     }
 
-    public interface ServerSearchListener {
+    public interface ClientSearchListener {
+        void onSearchStarted();
         void onSearchCompleted();
-        void onSearchCanceled(int reason);
+        void onSearchCanceled();
     }
 
     public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
@@ -285,8 +355,8 @@ public class ClientsSearchHandler {
                 // mark self ip failed state to avoid search later
                 int index = Utils.byteToInt(selfIpByte);
 
-                if (Utils.DEBUG_CONNECTION) {
-                    createConnectingTask(ip, mPort, false);
+                if (Utils.DEBUG_CONNECT_SELF) {
+                    createConnectingTask(ip, mPort);
                 } else {
                     setIpMask(index, IP_MARK_CONNECT_FAILED);
                 }
@@ -312,7 +382,9 @@ public class ClientsSearchHandler {
                     ip[3] = (byte) i;
 
                     if (isIpConnectAllowed(ip)) {
-                        createConnectingTask(ip, mPort, Utils.DEBUG_CONNECTION);
+                        createConnectingTask(ip, mPort);
+                    } else {
+                        setIpMask(i, IP_MARK_CONNECT_FAILED);
                     }
                 }
             } else {
@@ -330,13 +402,17 @@ public class ClientsSearchHandler {
                 ip[3] = (byte) i;
 
                 if (isIpConnectAllowed(ip)) {
-                    createConnectingTask(ip, mPort, Utils.DEBUG_CONNECTION);
+                    createConnectingTask(ip, mPort);
+                } else {
+                    setIpMask(i, IP_MARK_CONNECT_FAILED);
                 }
             }
 
             // search end. notify failed and do necessary clean
             if (!hasSearchingMask()) {
                 onScanCompleted();
+            } else {
+                onScannerStarted(this);
             }
         }
 
@@ -406,7 +482,7 @@ public class ClientsSearchHandler {
             return mIpSearchStateMask[index] == IP_MARK_IDLE;
         }
 
-        private void createConnectingTask(final byte ip[], final int port, final boolean isFake) {
+        private void createConnectingTask(final byte ip[], final int port) {
             if (ip.length != 4) {
                 Log.e(TAG, "createConnectingTask, ip addrss error:" + Utils.byteToInt(ip[3]));
                 return;
@@ -415,6 +491,11 @@ public class ClientsSearchHandler {
             int index = Utils.byteToInt(ip[3]);
             String ipAddress = IPv4Utils.bytesToIp(ip);
 
+            if (!isIpIdle(index)) {
+                Log.d(TAG, "createConnectingTask, ip not idle:" + Utils.byteToInt(ip[3]));
+                return;
+            }
+
             if (ConnectionManager.getInstance(mContext).isIpConnected(ipAddress)) {
                 Log.d(TAG, "ip:" + ipAddress + " already connected!");
                 setIpMask(index, IP_MARK_CONNECTED);
@@ -422,18 +503,6 @@ public class ClientsSearchHandler {
             } else if (ConnectionManager.getInstance(mContext).hasPendingConnectRequest(ipAddress)) {
                 Log.d(TAG, "ip:" + ipAddress + " has reconnecting request!");
                 setIpMask(index, IP_MARK_CONNECT_FAILED);
-                return;
-            }
-
-            if (!isIpIdle(index)) {
-                Log.d(TAG, "createConnectingTask, ip not idle:" + Utils.byteToInt(ip[3]));
-                return;
-            }
-
-            if (isFake) {
-                Log.d(TAG, "createConnectingTask, debug mode, IP:" + ipAddress + " ignored!" );
-                setIpMask(index, IP_MARK_CONNECT_FAILED);
-
                 return;
             }
 

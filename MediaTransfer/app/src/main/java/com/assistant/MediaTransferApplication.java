@@ -127,8 +127,7 @@ public class MediaTransferApplication extends Application {
 
         mAppQuit = true;
 
-        ClientsSearchHandler.getInstance(getApplicationContext())
-                .stopSearch(ClientsSearchHandler.SERVER_SEARCH_CANCELED);
+        ClientsSearchHandler.getInstance(getApplicationContext()).stopSearch();
 
         if (stopService) {
             MediaTransferService.startServiceForQuit(getApplicationContext());

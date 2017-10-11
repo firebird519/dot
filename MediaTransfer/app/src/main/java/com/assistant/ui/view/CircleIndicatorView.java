@@ -77,7 +77,7 @@ public class CircleIndicatorView extends View {
         mTextPaint.setColor(mTextColor);
         mTextPaint.setTextSize(mTextSize);
 
-        if (Utils.DEBUG_CONNECTION) {
+        if (Utils.DEBUG_CONNECT_SELF) {
             setText("1");
         }
     }

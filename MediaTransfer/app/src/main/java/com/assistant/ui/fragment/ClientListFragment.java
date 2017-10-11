@@ -17,6 +17,7 @@ import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.assistant.connection.ClientsSearchHandler;
 import com.assistant.connection.Connection;
 import com.assistant.connection.ConnectionManager;
 import com.assistant.datastorage.SharePreferencesHelper;
@@ -49,12 +50,33 @@ public class ClientListFragment extends Fragment {
     private ClientManager mClientManager;
     private LayoutInflater mLayoutInflater = null;
 
-    private SharePreferencesHelper mSharePreferencesHelper;
-
     private Activity mActivity;
+
+    private ClientsSearchHandler mClientsSearchHandler;
+    private ClientsSearchHandler.ClientSearchListener mClientSearchListener =
+            new ClientsSearchHandler.ClientSearchListener() {
+                @Override
+                public void onSearchStarted() {
+                    Log.d(this, "onSearchStarted");
+                    mHandler.sendEmptyMessage(EVENT_SEARCHING_UPDATE);
+                }
+
+                @Override
+                public void onSearchCompleted() {
+                    Log.d(this, "onSearchCompleted");
+                    mHandler.sendEmptyMessage(EVENT_SEARCHING_UPDATE);
+                }
+
+                @Override
+                public void onSearchCanceled() {
+                    Log.d(this, "onSearchCompleted");
+                    mHandler.sendEmptyMessage(EVENT_SEARCHING_UPDATE);
+                }
+            };
 
     private static final int EVENT_CANCEL_INDICATION = 0;
     private static final int EVENT_CONNECTION_LIST_UPDATED = 1;
+    private static final int EVENT_SEARCHING_UPDATE = 2;
 
     private Handler mHandler = new Handler(Looper.getMainLooper()) {
         @Override
@@ -65,6 +87,9 @@ public class ClientListFragment extends Fragment {
                     break;
                 case EVENT_CONNECTION_LIST_UPDATED:
                     mClientListAdapter.updateClientInfo();
+                    break;
+                case EVENT_SEARCHING_UPDATE:
+                    updateSearchIndicator();
                     break;
                 default:
                     break;
@@ -117,8 +142,6 @@ public class ClientListFragment extends Fragment {
 
         mActivity = getActivity();
 
-        mSharePreferencesHelper = SharePreferencesHelper.getInstance(mActivity);
-
         mConnManager = ConnectionManager.getInstance(getActivity().getApplicationContext());
         mLayoutInflater = (LayoutInflater) getActivity()
                 .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
@@ -158,6 +181,12 @@ public class ClientListFragment extends Fragment {
         Log.d(this, "onResume start");
         super.onResume();
 
+        if (mClientsSearchHandler == null) {
+            mClientsSearchHandler = ClientsSearchHandler.getInstance(mActivity);
+        }
+
+        mClientsSearchHandler.addListener(mClientSearchListener);
+
         updateClientListView();
         Log.d(this, "onResume end");
     }
@@ -165,6 +194,16 @@ public class ClientListFragment extends Fragment {
     @Override
     public void onPause() {
         super.onPause();
+
+        mClientsSearchHandler.removeListener(mClientSearchListener);
+    }
+
+    private void updateSearchIndicator() {
+        if (mClientsSearchHandler.isClientSearching()) {
+            showIndicatorText(R.string.searching);
+        } else {
+            hideIndicatorText();
+        }
     }
 
     private void showIndicatorText(int resId) {
